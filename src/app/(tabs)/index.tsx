@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
 import { addDays, formatMinutes, startOf } from '@/domain/dates';
+import { REASON_LABELS } from '@/domain/gate';
 import { leftOver, slotsLeft, type Task } from '@/domain/tasks';
-import { addTask, moveTask, setTaskStatus } from '@/db/repo';
+import { addTask, moveTask, saveSettings, setTaskStatus } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useToday, type TodayData } from '@/data/hooks';
 import { Button, Card, Chip, Field, Ring, Row, Screen, Txt } from '@/ui/components';
+import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
 
 export default function Today() {
@@ -23,6 +25,7 @@ export default function Today() {
         </Card>
       )}
       <Progress data={data} />
+      <GateCard data={data} />
       <WhyCard data={data} />
       <TopThree data={data} />
       <Week data={data} />
@@ -61,6 +64,36 @@ function Progress({ data }: { data: TodayData }) {
         <Stat icon="snow-outline" value={`${streak.freezes}`} label={streak.freezes === 1 ? 'freeze' : 'freezes'} />
         <Stat icon="time-outline" value={formatMinutes(reclaimedMin)} label="won back" />
       </View>
+    </Card>
+  );
+}
+
+/** Offer the gate, finish its setup, or show what it did today. */
+function GateCard({ data }: { data: TodayData }) {
+  const { wanted, serviceOn, today } = data.gate;
+  if (!wanted) {
+    return (
+      <Card>
+        <Txt variant="heading">Add a pause before wasted apps</Txt>
+        <Txt muted>Opening one shows a short wait and asks why. The pause gets longer as today's budget runs out.</Txt>
+        <Button title="Turn on the mindful gate" kind="secondary" onPress={() => saveSettings({ gateEnabled: true }).then(changed)} />
+      </Card>
+    );
+  }
+  if (!serviceOn) return <GateSetup />;
+  if (!today.shown) return null;
+  const top = today.reasons[0];
+  return (
+    <Card>
+      <Txt variant="heading">Mindful gate today</Txt>
+      <Txt>
+        Paused you {today.shown} {today.shown === 1 ? 'time' : 'times'}. You turned back {today.turnedBack}.
+      </Txt>
+      {top ? (
+        <Txt muted>
+          Most common reason: {REASON_LABELS[top.reason].toLowerCase()} ({top.count}).
+        </Txt>
+      ) : null}
     </Card>
   );
 }

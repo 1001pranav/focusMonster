@@ -8,4 +8,28 @@
       <category android:name="android.intent.category.LAUNCHER" />
     </intent>
   </queries>
+
+  <application>
+    <!-- Turned on by the user in Settings → Accessibility. -->
+    <service
+      android:name="expo.modules.usagestats.FocusAccessibilityService"
+      android:exported="true"
+      android:label="@string/focus_service_label"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/focus_accessibility" />
+    </service>
+
+    <!-- Its own task, so closing or continuing never brings FocusMonster's main screen forward. -->
+    <activity
+      android:name="expo.modules.usagestats.GateActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:launchMode="singleTask"
+      android:screenOrientation="portrait"
+      android:taskAffinity="focusmonster.gate"
+      android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+  </application>
 </manifest>

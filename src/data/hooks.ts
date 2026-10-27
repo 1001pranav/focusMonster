@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import { gateServiceEnabled } from '../../modules/usage-stats/gate';
 import { defaultTag, wastedMinutes, type AppTag } from '@/domain/apps';
-import { addDays, today, type Day } from '@/domain/dates';
+import { addDays, startOf, today, type Day } from '@/domain/dates';
+import { summarize, type GateSummary } from '@/domain/gate';
 import { reclaimedMinutes } from '@/domain/reclaimed';
 import { streakOf, type Streak } from '@/domain/streak';
 import { averageBefore, evaluate, type DayResult } from '@/domain/target';
 import type { Goal, Task } from '@/domain/tasks';
-import { loadAppLabels, loadDailyUsage, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
+import { loadAppLabels, loadDailyUsage, loadGateEvents, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
 import { useStore } from '@/db/store';
+import { importGateLog, pushGateConfig } from '@/services/gate';
 import { syncFinishedDays, usageSameTimeLastWeek, usageSoFar } from '@/services/usage';
 
 /** Runs `load` on mount, after every database write, and when the app comes back to the foreground. */
@@ -51,6 +54,7 @@ export interface TodayData {
   apps: AppMinutes[];
   goals: Goal[];
   tasks: Task[];
+  gate: { wanted: boolean; serviceOn: boolean; today: GateSummary };
 }
 
 export function useToday(): TodayData | null {
@@ -59,10 +63,13 @@ export function useToday(): TodayData | null {
     const plan = settings.plan;
     const day = today();
     await syncFinishedDays();
+    await importGateLog();
     const [tags, labels, usage, lastWeek, goals, tasks] = await Promise.all([loadTags(), loadAppLabels(), usageSoFar(), usageSameTimeLastWeek(), loadGoals(), loadTasks(addDays(day, -1))]);
     const stored = await loadDailyUsage(plan ? addDays(plan.startDay, -7) : addDays(day, -14));
     const wastedByDay = Object.fromEntries(Object.entries(stored).map(([d, u]) => [d, wastedMinutes(u, tags)]));
     const { days, todayTarget } = plan ? evaluate(plan, wastedByDay, day) : { days: [], todayTarget: 0 };
+    const gateEvents = await loadGateEvents(startOf(day).getTime());
+    pushGateConfig({ enabled: settings.gateEnabled, tags, targetMin: todayTarget, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)
@@ -80,6 +87,7 @@ export function useToday(): TodayData | null {
       apps,
       goals,
       tasks,
+      gate: { wanted: settings.gateEnabled, serviceOn: gateServiceEnabled(), today: summarize(gateEvents) },
     };
   });
 }

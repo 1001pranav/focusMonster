@@ -22,6 +22,14 @@ All data stays on the phone. There is no account and no backend.
 - **Daily Top 3:** tasks can link to a goal. Unfinished tasks are carried over to today or dropped.
 - **Morning plan and nightly recap notifications** at times you choose.
 
+## v2: mindful gate
+
+- Opening a wasted-time app shows a full-screen pause first. It asks why you're opening the app, shows today's budget, your why and your next Top 3 task, and offers **Close** or **Continue**.
+- The wait is 5 s, then 10 s at half the budget, 15 s at 80%, and 30 s once you're over.
+- After **Continue** the app stays open to you until you've been away from it for 2 minutes.
+- Every decision is logged, and Today shows how often the gate paused you, how often you turned back, and your most common reason.
+- It runs as an Accessibility service that only listens for which app is opening. It never reads screen content. Turn it on in Settings → Mindful gate. On Android 13+, a sideloaded APK also needs App info → ⋮ → **Allow restricted settings**.
+
 ## Development
 
 This app needs a development build, because Expo Go doesn't include the usage-stats module.
@@ -53,5 +61,6 @@ src/db/         SQLite schema, migrations and queries
 src/services/   usage sync, notifications
 src/data/       hooks that load what screens show
 src/ui/         theme and components
-modules/usage-stats/   Kotlin module: usage access check, foreground time, launcher apps
+modules/usage-stats/   Kotlin module: usage access, foreground time, launcher apps, and the mindful gate
+                       (accessibility service + native gate screen)
 ```
