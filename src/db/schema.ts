@@ -1,0 +1,12 @@
+/** Each entry upgrades the database by one version (PRAGMA user_version). Never edit a shipped one. */
+export const MIGRATIONS: string[] = [
+  `
+  CREATE TABLE settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+  CREATE TABLE app_tags (package TEXT PRIMARY KEY NOT NULL, label TEXT NOT NULL, tag TEXT NOT NULL);
+  -- Finished days only: today is always read live from the phone.
+  CREATE TABLE daily_usage (day TEXT NOT NULL, package TEXT NOT NULL, ms INTEGER NOT NULL, PRIMARY KEY (day, package));
+  CREATE TABLE goals (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, why TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+  CREATE TABLE tasks (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, goal_id TEXT, day TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
+  CREATE INDEX tasks_day ON tasks (day);
+  `,
+];

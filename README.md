@@ -9,4 +9,49 @@ An Android app that helps you cut down wasted phone time a little every day.
 
 All data stays on the phone. There is no account and no backend.
 
-Status: v1 in development.
+
+
+## v1 features
+
+- **Usage tracking:** foreground time per app, read from Android's usage events by a local Expo module (`modules/usage-stats`).
+- **Daily target with a hold rule:** it starts 1.5% below your baseline and drops 1.5% after every day you hit it, about 10% a week. A missed day keeps it where it is. It never goes below the goal you set.
+- **Fair comparisons:** today so far vs. the same time on the same weekday last week, and vs. your 7-day average.
+- **Streak with freezes:** every 7 hits in a row earns a freeze (up to 2), and a freeze covers one missed day.
+- **Time won back:** how far each finished day came in under your baseline, added up.
+- **Goals (at most 3), each with a why** that shows on the Today screen.
+- **Daily Top 3:** tasks can link to a goal. Unfinished tasks are carried over to today or dropped.
+- **Morning plan and nightly recap notifications** at times you choose.
+
+## Development
+
+This app needs a development build, because Expo Go doesn't include the usage-stats module.
+
+```bash
+npm install
+npx expo run:android          # local build on a connected phone or emulator
+npx eas-cli@latest build --profile development --platform android   # or a cloud build
+```
+
+Checks:
+
+```bash
+npx tsc --noEmit
+npx expo lint
+npm test
+# Kotlin unit tests for the usage module (after `npx expo prebuild --platform android`):
+cd android && ./gradlew :usage-stats:testDebugUnitTest
+```
+
+On first run, grant **Usage access** in the screen Android opens (Settings → Usage access → FocusMonster).
+
+## Layout
+
+```
+src/app/        screens (Expo Router)
+src/domain/     pure logic: target, streak, tasks, dates (unit tested)
+src/db/         SQLite schema, migrations and queries
+src/services/   usage sync, notifications
+src/data/       hooks that load what screens show
+src/ui/         theme and components
+modules/usage-stats/   Kotlin module: usage access check, foreground time, launcher apps
+```
