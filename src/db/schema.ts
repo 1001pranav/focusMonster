@@ -9,4 +9,9 @@ export const MIGRATIONS: string[] = [
   CREATE TABLE tasks (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, goal_id TEXT, day TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
   CREATE INDEX tasks_day ON tasks (day);
   `,
+  `
+  -- One row per mindful-gate decision, imported from the native log (modules/usage-stats/gate.ts).
+  CREATE TABLE gate_events (at INTEGER NOT NULL, package TEXT NOT NULL, reason TEXT, choice TEXT NOT NULL, wait_sec INTEGER NOT NULL);
+  CREATE INDEX gate_events_at ON gate_events (at);
+  `,
 ];

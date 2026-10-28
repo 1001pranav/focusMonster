@@ -1,8 +1,6 @@
 package expo.modules.usagestats
 
 import android.app.AppOpsManager
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -65,16 +63,7 @@ class UsageStatsModule : Module() {
 
   private fun foregroundTime(start: Long, end: Long): String {
     val out = JSONObject()
-    if (end <= start) return out.toString()
-    val usage = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-    val events = usage.queryEvents(start, end)
-    val raw = UsageEvents.Event()
-    val sequence = generateSequence {
-      if (!events.hasNextEvent()) return@generateSequence null
-      events.getNextEvent(raw)
-      raw.packageName?.let { ForegroundTime.Event(raw.eventType, it, raw.className ?: "", raw.timeStamp) }
-    }
-    ForegroundTime.compute(sequence, start, end).forEach { (pkg, ms) -> out.put(pkg, ms) }
+    UsageReader.foregroundMs(context, start, end).forEach { (pkg, ms) -> out.put(pkg, ms) }
     return out.toString()
   }
 

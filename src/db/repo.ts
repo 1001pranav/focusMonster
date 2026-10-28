@@ -1,4 +1,5 @@
 import type { AppTag } from '@/domain/apps';
+import type { GateEvent } from '@/domain/gate';
 import type { Day } from '@/domain/dates';
 import type { Plan } from '@/domain/target';
 import { newId, type Goal, type Task, type TaskStatus } from '@/domain/tasks';
@@ -12,9 +13,11 @@ export interface Settings {
   /** 'HH:MM', local time. */
   morningAt: string;
   nightAt: string;
+  /** The user wants the mindful gate; it only runs once the accessibility service is on too. */
+  gateEnabled: boolean;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30' };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
@@ -142,4 +145,25 @@ export async function setTaskStatus(id: string, status: TaskStatus): Promise<voi
 export async function moveTask(id: string, day: Day): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE tasks SET day = ? WHERE id = ?', [day, id]);
+}
+
+// Gate events
+
+export async function saveGateEvents(events: GateEvent[]): Promise<void> {
+  if (!events.length) return;
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    for (const e of events) {
+      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec) VALUES (?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec]);
+    }
+  });
+}
+
+export async function loadGateEvents(sinceMs: number): Promise<GateEvent[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number }>(
+    'SELECT * FROM gate_events WHERE at >= ? ORDER BY at',
+    [sinceMs],
+  );
+  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec }));
 }

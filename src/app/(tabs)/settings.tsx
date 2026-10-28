@@ -1,13 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { Switch, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
+import { gateServiceEnabled } from '../../../modules/usage-stats/gate';
 import { formatMinutes } from '@/domain/dates';
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
 import { ensurePermission, scheduleDaily } from '@/services/notifications';
 import { Card, Row, Screen, Stepper, Txt } from '@/ui/components';
+import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
 
 /** Times in 30-minute steps, stored as 'HH:MM'. */
@@ -19,8 +21,9 @@ const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')
 
 export default function Settings() {
   const { colors } = useTheme();
-  const settings = useLoad(loadSettings);
-  if (!settings) return <Screen>{null}</Screen>;
+  const loaded = useLoad(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled() }));
+  if (!loaded) return <Screen>{null}</Screen>;
+  const { settings, serviceOn } = loaded;
   const { plan } = settings;
 
   const setTime = async (key: 'morningAt' | 'nightAt', min: number) => {
@@ -56,6 +59,23 @@ export default function Settings() {
           </Txt>
         </Row>
       </Card>
+      <Card>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="heading">Mindful gate</Txt>
+            <Txt variant="caption" muted>
+              {!settings.gateEnabled ? 'Off' : serviceOn ? 'On: wasted apps open after a short pause' : 'Waiting for Accessibility to be turned on'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Mindful gate"
+            value={settings.gateEnabled}
+            onValueChange={(on) => saveSettings({ gateEnabled: on }).then(changed)}
+            trackColor={{ true: colors.primary, false: colors.track }}
+          />
+        </Row>
+      </Card>
+      {settings.gateEnabled && !serviceOn ? <GateSetup /> : null}
       <Card>
         <Txt variant="heading">Morning plan</Txt>
         <Stepper value={toMinutes(settings.morningAt)} onChange={(v) => setTime('morningAt', v)} step={30} min={4 * 60} max={12 * 60} format={toHHMM} />

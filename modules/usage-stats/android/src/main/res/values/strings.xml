@@ -1,0 +1,4 @@
+<resources>
+  <string name="focus_service_label">FocusMonster mindful gate</string>
+  <string name="focus_service_description">Shows a short pause before the apps you marked as wasted time, so opening them is a choice. FocusMonster only learns which app is opening. It never reads what is on your screen.</string>
+</resources>
