@@ -1,4 +1,5 @@
-import { configureGate, drainGateLog } from '../../modules/usage-stats/gate';
+import * as Notifications from 'expo-notifications';
+import { configureGate, drainGateLog, pauseService } from '../../modules/usage-stats/gate';
 import type { GateChoice, GateEvent, GateReason } from '@/domain/gate';
 import { gateWhy, nextTask } from '@/domain/gate';
 import { DEFAULT_WASTED, type AppTag } from '@/domain/apps';
@@ -41,7 +42,7 @@ export async function importGateLog(): Promise<void> {
  * Hands the gate what it shows. It reads this while the app is closed, so the target is today's as
  * of the last time the app was opened; a new day keeps yesterday's until then.
  */
-export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; focus: FocusSession | null; habits: Habit[]; nextIfHit: number; morningAt: string; nightAt: string; bedtime: Bedtime; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
+export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; focus: FocusSession | null; habits: Habit[]; nextIfHit: number; morningAt: string; nightAt: string; bedtime: Bedtime; overlay: boolean; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
   const task = nextTask(input.tasks, input.day);
   configureGate({
     enabled: input.enabled,
@@ -63,6 +64,8 @@ export function pushGateConfig(input: { enabled: boolean; pending: Pending; shor
     nightAt: input.nightAt,
     bedtime: input.bedtime,
     bedtimeNext: input.pending.bedtimeNext ?? null,
+    overlay: input.overlay,
+    overlayOffAt: input.pending.overlayOffAt ?? 0,
     nextTask: task?.title ?? null,
     why: gateWhy(input.goals, task),
   });
@@ -73,4 +76,22 @@ export function wastedPackages(tags: Record<string, AppTag>): string[] {
   const tagged = Object.entries(tags).filter(([, tag]) => tag === 'wasted').map(([pkg]) => pkg);
   const untaggedDefaults = [...DEFAULT_WASTED].filter((pkg) => !(pkg in tags));
   return [...tagged, ...untaggedDefaults];
+}
+
+const RESUME_REMINDER = 'resume-gate';
+export const PAUSE_MIN = 15;
+
+/**
+ * For banking and UPI apps that refuse to open while any accessibility service is on. Android only
+ * lets the user turn the service back on, so a reminder follows after PAUSE_MIN minutes.
+ */
+export async function pauseForBanking(): Promise<boolean> {
+  if (!pauseService()) return false;
+  await Notifications.cancelScheduledNotificationAsync(RESUME_REMINDER).catch(() => {});
+  await Notifications.scheduleNotificationAsync({
+    identifier: RESUME_REMINDER,
+    content: { title: 'FocusMonster is still paused', body: 'Done with your banking app? Tap to turn the gate and the Reels counter back on.' },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Date.now() + PAUSE_MIN * 60000), channelId: 'daily' },
+  }).catch((e) => console.warn(e));
+  return true;
 }

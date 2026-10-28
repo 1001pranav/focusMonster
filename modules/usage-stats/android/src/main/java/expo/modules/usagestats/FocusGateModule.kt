@@ -47,6 +47,16 @@ class FocusGateModule : Module() {
     /** Starts the background worker once; later calls keep the running schedule. */
     Function("scheduleBackground") { BudgetWorker.schedule(context) }
 
+    /**
+     * Turns the accessibility service off, for apps (mostly banks) that refuse to run while any is
+     * on. Only the user can turn it back on, in Accessibility settings. False if it wasn't running.
+     */
+    Function("pauseService") {
+      val service = FocusAccessibilityService.instance ?: return@Function false
+      service.disableSelf()
+      true
+    }
+
     Function("detectionInfo") { Detection.read(context) }
 
     Function("shortVideoDays") { ShortVideoStore.read(context).toString() }

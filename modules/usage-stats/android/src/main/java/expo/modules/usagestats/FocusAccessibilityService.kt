@@ -1,7 +1,12 @@
 package expo.modules.usagestats
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
@@ -13,8 +18,8 @@ object Gate {
 }
 
 /**
- * Watches which app comes to the foreground and opens the mindful gate for apps tagged as wasted
- * time. Inside Instagram and YouTube it also checks whether the Reels or Shorts player is on
+ * Watches the apps tagged as wasted time (and only those, see applyWatchList) and opens the mindful
+ * gate when one comes to the foreground. Inside Instagram and YouTube it also checks whether the Reels or Shorts player is on
  * screen, by the player's view id, to count videos, pause the user every few of them, or block the
  * player. It never reads text, posts or messages.
  */
@@ -29,9 +34,23 @@ class FocusAccessibilityService : AccessibilityService() {
     private const val PLAYER_EVENTS = BASE_EVENTS or AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
     /** Looking for the player walks the view tree, so content changes are checked at most this often. */
     private const val CHECK_EVERY_MS = 400L
+    /** Usage history looked at to tell an arrival from a screen change, and when the user last left. */
+    private const val LOOKBACK_MS = 10 * 60_000L
+    /** While the player is open, how often to check the user hasn't switched to an app that isn't watched. */
+    private const val WATCHDOG_MS = 1_500L
+    /** Stands for "some app the service doesn't watch" in the gate's memory. */
+    private const val ELSEWHERE = "elsewhere"
+
+    /** The running service, so a config change can narrow what it watches and the app can pause it. */
+    @Volatile
+    var instance: FocusAccessibilityService? = null
+      private set
   }
 
+  private val main = Handler(Looper.getMainLooper())
+
   private var foreground: String? = null
+  private val overlay by lazy { ReelOverlay(this) }
   private var lastWindow: String? = null
   private var playerApp: String? = null
   private var lastCheck = 0L
@@ -49,7 +68,15 @@ class FocusAccessibilityService : AccessibilityService() {
   override fun onInterrupt() {}
 
   private fun onWindow(pkg: String, now: Long) {
+    if (pkg == packageName) return
     val config = GateStore.config(this)
+    // Only watched apps send events, so usage history says whether this is an arrival and when the
+    // user last left; the gate's memory gets the departure it couldn't see.
+    val arrival = Visit.of(UsageReader.intervals(this, now - LOOKBACK_MS, now).filter { it.packageName == pkg }, now)
+    val newVisit = arrival.fresh || lastWindow != pkg
+    if (arrival.fresh && lastWindow == pkg) Gate.rules.onForeground(ELSEWHERE, arrival.leftAt ?: (now - LOOKBACK_MS), gated = false)
+    lastWindow = pkg
+
     // A focus session closes every wasted app, whether or not the gate is switched on, and an
     // earlier "Continue" doesn't count.
     val focusBlocked = config.focusActive(now) && pkg in config.wasted
@@ -57,23 +84,53 @@ class FocusAccessibilityService : AccessibilityService() {
     val minute = java.util.Calendar.getInstance().let { it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE) }
     val bedtime = !focusBlocked && pkg in config.wasted && config.quietHours(now).active(minute)
     val gated = !focusBlocked && (bedtime || config.gates(pkg, now))
-    val prev = lastWindow
-    lastWindow = pkg
     if (Gate.rules.onForeground(pkg, now, gated)) openGate(pkg, if (bedtime) GateActivity.MODE_BEDTIME else GateActivity.MODE_OPEN)
-    if (focusBlocked && pkg != prev) openGate(pkg, GateActivity.MODE_FOCUS)
+    if (focusBlocked && newVisit) openGate(pkg, GateActivity.MODE_FOCUS)
 
-    if (pkg == foreground) {
-      if (pkg in PLAYERS) checkPlayer(pkg, now)
-      return
+    if (pkg != foreground) {
+      foreground = pkg
+      if (pkg in PLAYERS) Detection.noteOpened(this, pkg, now) else leavePlayer(now)
     }
-    // Keyboards and the notification shade come and go on top; they don't close the player.
-    if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
-    foreground = pkg
-    if (pkg in PLAYERS) Detection.noteOpened(this, pkg, now)
-    if (pkg !in PLAYERS) leavePlayer(now)
     // Scroll and content events only while a short-video app is open: elsewhere they are pure cost.
     setEvents(if (pkg in PLAYERS) PLAYER_EVENTS else BASE_EVENTS)
-    if (pkg in PLAYERS) checkPlayer(pkg, now)
+    if (pkg in PLAYERS) {
+      checkPlayer(pkg, now)
+      startWatchdog()
+    }
+  }
+
+  /**
+   * The apps the service receives events from: the wasted ones and the short-video apps. Every other
+   * app, banking and UPI apps included, never has the service attached. Never empty: an empty list
+   * would mean every app.
+   */
+  fun applyWatchList() {
+    val info = serviceInfo ?: return
+    val watched = (GateStore.config(this).wasted + PLAYERS.keys).toSortedSet()
+    if (info.packageNames?.toSortedSet() == watched) return
+    info.packageNames = watched.toTypedArray()
+    serviceInfo = info
+  }
+
+  /** While a short-video app is open, notices the user switching to an app the service doesn't watch. */
+  private val watchdog = object : Runnable {
+    override fun run() {
+      val now = System.currentTimeMillis()
+      val current = Visit.foreground(UsageReader.intervals(this@FocusAccessibilityService, now - LOOKBACK_MS, now), now)
+      if (current != null && current in PLAYERS) return scheduleWatchdog()
+      foreground = current
+      leavePlayer(now)
+      setEvents(BASE_EVENTS)
+    }
+  }
+
+  private fun startWatchdog() {
+    main.removeCallbacks(watchdog)
+    scheduleWatchdog()
+  }
+
+  private fun scheduleWatchdog() {
+    main.postDelayed(watchdog, WATCHDOG_MS)
   }
 
   private fun setEvents(types: Int) {
@@ -107,9 +164,11 @@ class FocusAccessibilityService : AccessibilityService() {
     playerApp = pkg
     Detection.notePlayerSeen(this, pkg, now)
     if (Gate.reels.enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
+    updateOverlay(pkg, now)
   }
 
   private fun leavePlayer(now: Long) {
+    overlay.hide()
     val pkg = playerApp ?: return
     playerApp = null
     ShortVideoStore.add(this, pkg, now, ms = Gate.reels.leave(now))
@@ -124,11 +183,40 @@ class FocusAccessibilityService : AccessibilityService() {
     if (!Gate.reels.inFeed) enterPlayer(pkg, now)
     if (!Gate.reels.inFeed || !Gate.reels.scroll(now)) return
     ShortVideoStore.add(this, pkg, now, count = 1)
+    updateOverlay(pkg, now)
     val policy = GateStore.config(this).shortsPolicy(now)
     if (policy.mode == ShortsPolicy.PAUSE && Gate.reels.breakDue(policy.limit)) {
       Gate.reels.tookBreak()
       openGate(pkg, GateActivity.MODE_BREAK)
     }
+  }
+
+  private fun updateOverlay(pkg: String, now: Long) {
+    val config = GateStore.config(this)
+    if (!config.overlayOn(now)) return overlay.hide()
+    val today = ShortVideoStore.read(this).optJSONObject(ShortVideoStore.dayOf(now))?.optJSONObject(pkg)?.optInt("count") ?: 0
+    val minutes = (now - Gate.reels.sessionStartedAt) / 60000.0
+    runCatching { overlay.show(OverlayText.of(Gate.reels.sessionCount, minutes, today, config.shortsPolicy(now))) }
+  }
+
+  /** Screen off ends a Reels visit: no window event says so, and the pill mustn't sit on the lock screen. */
+  private val screenOff = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) = leavePlayer(System.currentTimeMillis())
+  }
+
+  override fun onServiceConnected() {
+    super.onServiceConnected()
+    instance = this
+    applyWatchList()
+    registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+  }
+
+  override fun onDestroy() {
+    instance = null
+    main.removeCallbacks(watchdog)
+    runCatching { unregisterReceiver(screenOff) }
+    overlay.hide()
+    super.onDestroy()
   }
 
   /** Resource ids from the scrolled view up through its parents, null where a view has none. */

@@ -22,7 +22,6 @@ export function HabitsCard({ data }: { data: TodayData }) {
 
   return (
     <Card>
-      <Txt variant="heading">Instead of scrolling</Txt>
       {!data.habits.length ? <Txt muted>Pick small things you'd rather do. The first three show on the gate, one tap away.</Txt> : null}
       {data.habits.map(({ habit, done, pickedAtGate }) => (
         <Row key={habit.id} onPress={() => act(setHabitDone(habit.id, data.day, !done))}>

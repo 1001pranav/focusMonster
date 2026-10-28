@@ -11,7 +11,7 @@ import { evaluate } from '@/domain/target';
 import { loadDailyUsage, loadFocusSessions, loadGateEvents, loadHabitLogs, loadReflections, loadSettings, loadShortVideo, loadTags } from '@/db/repo';
 import { useLoad } from '@/data/hooks';
 import { wastedPackages } from '@/services/gate';
-import { Button, Card, Row, Screen, Txt } from '@/ui/components';
+import { BackBar, Button, Card, Row, Screen, Txt, LoadingState } from '@/ui/components';
 import { space, useTheme } from '@/ui/theme';
 
 /** The last seven finished days, against the seven before. */
@@ -37,7 +37,7 @@ export default function Review() {
     const byHour = await usageByHour(fromMs, toMs, wastedPackages(tags));
     return buildReview({ lastDay, days, shortVideo, sessions: sessions.filter((s) => s.startedAt < toMs), habitLogs, gateEvents: gateEvents.filter((e) => e.at < toMs), reflections, byHour, now: Date.now() });
   });
-  if (!review) return <Screen>{null}</Screen>;
+  if (!review) return <LoadingState label="Putting your week together…" />;
 
   const share = async () => {
     if (!shareRef.current) return;
@@ -47,6 +47,7 @@ export default function Review() {
 
   return (
     <Screen>
+      <BackBar title="Progress" />
       <Txt variant="title">Your week</Txt>
       <Txt muted>
         {review.from} to {review.to}

@@ -35,6 +35,7 @@ All data stays on the phone. There is no account and no backend.
 - **Counts** Reels and Shorts watched per day, and the minutes spent in the player. Today compares the count with yesterday.
 - **Three modes:** *Just count*, *Pause me* (a break screen every 10, 20 or 30 videos, with a wait of at least 10 s), or *Block* (the player is closed with Back and the rest of the app stays usable).
 - How it works: inside Instagram and YouTube only, the accessibility service looks for the short-video player by its view id (`FocusAccessibilityService.PLAYERS`). Only swipes of the player itself count, and a burst of scroll events from one swipe is one video. Time in the player stops counting a minute after the last swipe.
+- **Live counter:** while the player is open, a small pill at the top shows `🎬 12 / 20 · 48 today` (or `12 · 6m` when only counting). It turns orange 3 videos before a break. Touches pass through it, and it needs no extra permission. Turning it off waits out the 24-hour lock.
 - ⚠️ When Instagram or YouTube renames those view ids in an update, detection stops silently. If the counts drop to zero while you're clearly watching, the ids need updating.
 
 ## Focus sessions and habits

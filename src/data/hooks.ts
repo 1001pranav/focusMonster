@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
+import { hasUsageAccess } from '../../modules/usage-stats';
 import { gateServiceEnabled } from '../../modules/usage-stats/gate';
 import { defaultTag, wastedMinutes, type AppTag } from '@/domain/apps';
 import { addDays, startOf, today, type Day } from '@/domain/dates';
@@ -19,24 +21,47 @@ import { importShortVideo } from '@/services/shorts';
 import { checkChallenge, type ActiveChallenge } from '@/services/challenges';
 import { syncFinishedDays, usageSameTimeLastWeek, usageSoFar } from '@/services/usage';
 
-/** Runs `load` on mount, after every database write, and when the app comes back to the foreground. */
-export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): T | null {
+export interface LoadResult<T> {
+  value: T | null;
+  /** The last load's failure; the previous value, if any, is kept so the screen doesn't go blank. */
+  error: Error | null;
+  reload: () => void;
+}
+
+/** Runs `load` on mount, after every database write, when the app comes back, and on reload(). */
+export function useLoadResult<T>(load: () => Promise<T>, deps: unknown[] = []): LoadResult<T> {
   const version = useStore((s) => s.version);
-  const [foreground, setForeground] = useState(0);
+  const [tick, setTick] = useState(0);
   const [value, setValue] = useState<T | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => s === 'active' && setForeground((n) => n + 1));
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && setTick((n) => n + 1));
     return () => sub.remove();
   }, []);
   useEffect(() => {
     let live = true;
-    load().then((v) => live && setValue(v), (e) => console.warn(e));
+    load().then(
+      (v) => {
+        if (!live) return;
+        setValue(v);
+        setError(null);
+      },
+      (e) => {
+        console.warn(e);
+        if (live) setError(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, foreground, ...deps]);
-  return value;
+  }, [version, tick, ...deps]);
+  return { value, error, reload: () => setTick((n) => n + 1) };
+}
+
+/** useLoadResult for screens that only need the value. */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): T | null {
+  return useLoadResult(load, deps).value;
 }
 
 export interface AppMinutes {
@@ -70,13 +95,15 @@ export interface TodayData {
   };
   habits: { habit: Habit; done: boolean; pickedAtGate: boolean }[];
   challenge: ActiveChallenge | null;
+  /** What's switched on, for the setup checklist. */
+  setup: { usageAccess: boolean; notifications: boolean };
   /** Tonight's one-liner, once written. */
   reflection: string | null;
   now: number;
 }
 
-export function useToday(): TodayData | null {
-  return useLoad(async () => {
+export function useTodayResult(): LoadResult<TodayData> {
+  return useLoadResult(async () => {
     await applyDuePending();
     const settings = await loadSettings();
     const plan = settings.plan;
@@ -97,7 +124,7 @@ export function useToday(): TodayData | null {
       [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
     const challenge = await checkChallenge({ current: day, tags, bedtime: settings.bedtime, days });
     const pickedAtGate = new Set(gateEvents.filter((e) => e.choice === 'instead').map((e) => e.habitId));
-    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, bedtime: settings.bedtime, tasks, goals, day });
+    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, bedtime: settings.bedtime, overlay: settings.shortsOverlay, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)
@@ -120,6 +147,7 @@ export function useToday(): TodayData | null {
       focus: { running: focus, justDone, todayMin: focusedToday(sessions, day, now) },
       habits: habits.map((habit) => ({ habit, done: doneOn(habitLogs, habit.id, day), pickedAtGate: pickedAtGate.has(habit.id) })),
       challenge,
+      setup: { usageAccess: hasUsageAccess(), notifications: (await Notifications.getPermissionsAsync()).granted },
       reflection: reflections[0]?.text ?? null,
       now,
     };

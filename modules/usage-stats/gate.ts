@@ -9,6 +9,7 @@ interface FocusGateNative {
   drainLog(): string;
   shortVideoDays(): string;
   detectionInfo(): string;
+  pauseService(): boolean;
   scheduleBackground(): void;
 }
 
@@ -48,6 +49,9 @@ export interface GateConfig {
   nightAt: string;
   bedtime: { enabled: boolean; start: string; end: string; morningFreeMin: number };
   bedtimeNext: { enabled: boolean; start: string; end: string; morningFreeMin: number; at: number } | null;
+  /** The live counter over Reels/Shorts, and the epoch ms it turns off (0 for never). */
+  overlay: boolean;
+  overlayOffAt: number;
   nextTask: string | null;
   why: string | null;
 }
@@ -86,3 +90,6 @@ export interface DetectionApp {
 
 /** What Reels/Shorts detection saw today, for the detection check screen. */
 export const detectionInfo = (): { day?: string; apps?: Record<string, DetectionApp> } => (native ? JSON.parse(native.detectionInfo()) : {});
+
+/** Turns the accessibility service off (for apps that refuse to run while one is on). False if it wasn't on. */
+export const pauseService = () => native?.pauseService() ?? false;
