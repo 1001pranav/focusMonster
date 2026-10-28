@@ -13,6 +13,7 @@ import { Button, Card, Chip, Field, Ring, Row, Screen, Txt } from '@/ui/componen
 import { FocusCard } from '@/ui/FocusCard';
 import { GateSetup } from '@/ui/GateSetup';
 import { HabitsCard } from '@/ui/HabitsCard';
+import { ReflectionCard } from '@/ui/ReflectionCard';
 import { space, useTheme } from '@/ui/theme';
 
 export default function Today() {
@@ -35,6 +36,7 @@ export default function Today() {
       <FocusCard data={data} />
       <HabitsCard data={data} />
       <Week data={data} />
+      <ReflectionCard data={data} />
       <Apps data={data} />
     </Screen>
   );

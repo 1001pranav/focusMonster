@@ -43,6 +43,11 @@ class UsageStatsModule : Module() {
     }
 
     AsyncFunction("launcherApps") { launcherApps() }
+
+    /** JSON array of 24 numbers: milliseconds of the given apps per local hour, over the range. */
+    AsyncFunction("byHour") { startMs: Double, endMs: Double, packages: List<String> ->
+      JSONArray(UsageReader.byHour(context, startMs.toLong(), minOf(endMs.toLong(), System.currentTimeMillis()), packages.toSet()).toList()).toString()
+    }
   }
 
   private fun hasUsageAccess(): Boolean {
