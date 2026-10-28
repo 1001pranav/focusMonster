@@ -1,7 +1,7 @@
 import { gateWhy, nextTask, summarize, type GateEvent } from '../gate';
 import type { Goal, Task } from '../tasks';
 
-const event = (choice: GateEvent['choice'], reason: GateEvent['reason']): GateEvent => ({ at: 0, packageName: 'p', reason, choice, waitSec: 5 });
+const event = (choice: GateEvent['choice'], reason: GateEvent['reason']): GateEvent => ({ at: 0, packageName: 'p', reason, choice, waitSec: 5, kind: 'open', habitId: null });
 
 describe('summarize', () => {
   it('counts turning back, including walking away', () => {

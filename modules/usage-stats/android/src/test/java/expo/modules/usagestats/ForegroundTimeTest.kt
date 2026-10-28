@@ -76,4 +76,14 @@ class ForegroundTimeTest {
       ),
     )
   }
+
+  @Test
+  fun `splits time across the hours of the day`() {
+    val hour = 3_600_000L
+    val events = sequenceOf(Event(ACTIVITY_RESUMED, ig, "Main", 10 * hour - 600_000), Event(ACTIVITY_PAUSED, ig, "Main", 10 * hour + 1_200_000), Event(ACTIVITY_RESUMED, yt, "Main", 11 * hour), Event(ACTIVITY_PAUSED, yt, "Main", 11 * hour + 60_000))
+    val hours = ForegroundTime.byHour(events, 0, 24 * hour, setOf(ig)) { ((it / hour) % 24).toInt() }
+    assertEquals(600_000L, hours[9])
+    assertEquals(1_200_000L, hours[10])
+    assertEquals(0L, hours[11])
+  }
 }

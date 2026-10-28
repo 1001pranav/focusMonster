@@ -25,6 +25,16 @@ import org.json.JSONObject
 class GateActivity : Activity() {
   companion object {
     const val EXTRA_PACKAGE = "package"
+    const val EXTRA_MODE = "mode"
+    const val EXTRA_REELS = "reels"
+    const val EXTRA_SINCE = "since"
+    /** Opening a wasted app, or a break in the middle of Reels/Shorts. */
+    const val MODE_OPEN = "open"
+    const val MODE_BREAK = "break"
+    /** A wasted app opened during a focus session: no reason, no Continue, only ending the session. */
+    const val MODE_FOCUS = "focus"
+    /** A wasted app during bedtime: "Go to sleep", or open it anyway after a long wait. */
+    const val MODE_BEDTIME = "bedtime"
 
     /** Stored keys; the JS side (src/domain/gate.ts) has the matching labels. */
     private val REASONS = listOf(
@@ -46,6 +56,9 @@ class GateActivity : Activity() {
   }
 
   private lateinit var pkg: String
+  private var mode = MODE_OPEN
+  /** Today's target, worked out natively so a new day is right before FocusMonster is opened. */
+  private var targetMin = 0
   private var reason: String? = null
   private var waitLeft = 0
   private var waitTotal = 0
@@ -57,10 +70,19 @@ class GateActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     pkg = intent.getStringExtra(EXTRA_PACKAGE) ?: return finish()
+    mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_OPEN
     val config = GateStore.config(this)
-    val usedMin = wastedMinutesToday(config)
-    val ratio = if (config.targetMin > 0) usedMin / config.targetMin else 0.0
-    waitTotal = GateRules.waitSeconds(ratio)
+    val numbers = TodayNumbers.measure(this, config, System.currentTimeMillis())
+    val usedMin = numbers.usedMin
+    val ratio = numbers.ratio
+    targetMin = numbers.targetMin
+    // A break mid-scroll is never shorter than 10 s: it has to outlast the urge to swipe.
+    waitTotal = when (mode) {
+      MODE_FOCUS -> 10
+      MODE_BEDTIME -> 30
+      MODE_BREAK -> maxOf(10, GateRules.waitSeconds(ratio))
+      else -> GateRules.waitSeconds(ratio)
+    }
     waitLeft = waitTotal
     setContentView(layout(config, usedMin, ratio))
     if (Build.VERSION.SDK_INT >= 33) {
@@ -72,7 +94,7 @@ class GateActivity : Activity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     // Another wasted app was opened while the gate was up: start over for that one.
-    if (intent.getStringExtra(EXTRA_PACKAGE) != pkg) {
+    if (intent.getStringExtra(EXTRA_PACKAGE) != pkg || intent.getStringExtra(EXTRA_MODE) != mode) {
       setIntent(intent)
       recreate()
     }
@@ -89,13 +111,6 @@ class GateActivity : Activity() {
     super.onDestroy()
   }
 
-  private fun wastedMinutesToday(config: GateConfig): Double =
-    runCatching {
-      UsageReader.foregroundMs(this, UsageReader.startOfToday(), System.currentTimeMillis())
-        .filterKeys { it in config.wasted }
-        .values.sum() / 60000.0
-    }.getOrDefault(0.0)
-
   private fun appLabel(): String =
     runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
 
@@ -105,19 +120,30 @@ class GateActivity : Activity() {
       setPadding(dp(24), dp(56), dp(24), dp(32))
     }
     val label = appLabel()
-    column.addView(text("Opening $label", 26f, TEXT, bold = true))
-    column.addView(space(8))
-    column.addView(text("Why are you opening it?", 17f, MUTED))
+    if (mode == MODE_FOCUS) return focusLayout(column, config, label)
+    if (mode == MODE_BEDTIME) return bedtimeLayout(column, config, label)
+    if (mode == MODE_BREAK) {
+      val reels = intent.getIntExtra(EXTRA_REELS, 0)
+      val since = intent.getLongExtra(EXTRA_SINCE, System.currentTimeMillis())
+      val kind = if (pkg.contains("youtube")) "Shorts" else "reels"
+      column.addView(text("$reels $kind in a row", 26f, TEXT, bold = true))
+      column.addView(space(8))
+      column.addView(text("That's ${minutes((System.currentTimeMillis() - since) / 60000.0)} of swiping. Why keep going?", 17f, MUTED))
+    } else {
+      column.addView(text("Opening $label", 26f, TEXT, bold = true))
+      column.addView(space(8))
+      column.addView(text("Why are you opening it?", 17f, MUTED))
+    }
     column.addView(space(16))
     column.addView(reasonChips())
 
-    if (config.targetMin > 0) {
+    if (targetMin > 0) {
       column.addView(space(24))
       val over = ratio >= 1
       column.addView(
         text(
-          if (over) "You're ${minutes(usedMin - config.targetMin)} over today's target."
-          else "${minutes(usedMin)} of today's ${minutes(config.targetMin.toDouble())} used.",
+          if (over) "You're ${minutes(usedMin - targetMin)} over today's target."
+          else "${minutes(usedMin)} of today's ${minutes(targetMin.toDouble())} used.",
           15f,
           if (over) OVER else TEXT,
         ),
@@ -134,6 +160,16 @@ class GateActivity : Activity() {
       column.addView(text(it, 17f, TEXT))
     }
 
+    if (config.instead.isNotEmpty()) {
+      column.addView(space(24))
+      column.addView(text("INSTEAD", 12f, MUTED, bold = true))
+      column.addView(space(4))
+      config.instead.forEach { (id, title) ->
+        column.addView(button(title, SURFACE, TEXT) { insteadOf(id) })
+        column.addView(space(8))
+      }
+    }
+
     column.addView(space(32))
     column.addView(button("Close $label", PRIMARY, PRIMARY_TEXT) { close() })
     column.addView(space(12))
@@ -141,6 +177,54 @@ class GateActivity : Activity() {
     column.addView(continueButton)
     updateContinue()
 
+    return ScrollView(this).apply {
+      setBackgroundColor(BG)
+      addView(column)
+    }
+  }
+
+  private fun focusLayout(column: LinearLayout, config: GateConfig, label: String): View {
+    val left = ((config.focusUntil - System.currentTimeMillis()) / 60000.0).coerceAtLeast(1.0)
+    column.addView(text("Focus session: ${minutes(left)} left", 26f, TEXT, bold = true))
+    column.addView(space(8))
+    column.addView(text("$label stays closed until it ends.", 17f, MUTED))
+    config.focusTask?.let {
+      column.addView(space(24))
+      column.addView(text("YOU'RE WORKING ON", 12f, MUTED, bold = true))
+      column.addView(text(it, 17f, TEXT, bold = true))
+    }
+    config.why?.let {
+      column.addView(space(24))
+      column.addView(text("WHY YOU STARTED", 12f, MUTED, bold = true))
+      column.addView(text("“$it”", 17f, TEXT))
+    }
+    column.addView(space(32))
+    column.addView(button("Back to work", PRIMARY, PRIMARY_TEXT) { backToWork() })
+    column.addView(space(12))
+    continueButton = button("", SURFACE, TEXT) { endFocus() }
+    column.addView(continueButton)
+    updateContinue()
+    return ScrollView(this).apply {
+      setBackgroundColor(BG)
+      addView(column)
+    }
+  }
+
+  private fun bedtimeLayout(column: LinearLayout, config: GateConfig, label: String): View {
+    column.addView(text("It's bedtime", 26f, TEXT, bold = true))
+    column.addView(space(8))
+    column.addView(text("$label opens again at ${config.quietHours(System.currentTimeMillis()).opensAt()}. Scrolling now borrows from tomorrow's energy.", 17f, MUTED))
+    config.why?.let {
+      column.addView(space(24))
+      column.addView(text("WHY YOU STARTED", 12f, MUTED, bold = true))
+      column.addView(text("“$it”", 17f, TEXT))
+    }
+    column.addView(space(32))
+    column.addView(button("Go to sleep", PRIMARY, PRIMARY_TEXT) { close() })
+    column.addView(space(12))
+    continueButton = button("", SURFACE, TEXT) { proceed() }
+    column.addView(continueButton)
+    updateContinue()
     return ScrollView(this).apply {
       setBackgroundColor(BG)
       addView(column)
@@ -189,6 +273,18 @@ class GateActivity : Activity() {
 
   private fun updateContinue() {
     if (!::continueButton.isInitialized) return
+    if (mode == MODE_BEDTIME) {
+      continueButton.isEnabled = waitLeft == 0
+      continueButton.alpha = if (waitLeft == 0) 1f else 0.5f
+      continueButton.text = if (waitLeft > 0) "Open anyway in ${waitLeft}s" else "Open anyway"
+      return
+    }
+    if (mode == MODE_FOCUS) {
+      continueButton.isEnabled = waitLeft == 0
+      continueButton.alpha = if (waitLeft == 0) 1f else 0.5f
+      continueButton.text = if (waitLeft > 0) "End the session early in ${waitLeft}s" else "End the session early"
+      return
+    }
     val ready = waitLeft == 0 && reason != null
     continueButton.isEnabled = ready
     continueButton.alpha = if (ready) 1f else 0.5f
@@ -202,6 +298,35 @@ class GateActivity : Activity() {
   private fun close() {
     decided = true
     log("closed")
+    goHome()
+  }
+
+  /** Closes the app and offers a habit instead. Picking one isn't proof it was done, so it's only logged. */
+  private fun insteadOf(habitId: String) {
+    decided = true
+    log("instead", habitId)
+    goHome()
+  }
+
+  /** Back to FocusMonster, where the session's timer is. */
+  private fun backToWork() {
+    decided = true
+    log("closed")
+    val launch = packageManager.getLaunchIntentForPackage(packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (launch != null) startActivity(launch) else goHome()
+    finish()
+  }
+
+  private fun endFocus() {
+    decided = true
+    val now = System.currentTimeMillis()
+    GateStore.endFocus(this, now)
+    log("focus_end")
+    Gate.rules.allow(pkg, now)
+    finish()
+  }
+
+  private fun goHome() {
     startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     finish()
   }
@@ -213,7 +338,7 @@ class GateActivity : Activity() {
     finish()
   }
 
-  private fun log(choice: String) {
+  private fun log(choice: String, habitId: String? = null) {
     GateStore.appendLog(
       this,
       JSONObject()
@@ -221,7 +346,9 @@ class GateActivity : Activity() {
         .put("package", pkg)
         .put("reason", reason ?: JSONObject.NULL)
         .put("choice", choice)
-        .put("waitSec", waitTotal),
+        .put("waitSec", waitTotal)
+        .put("kind", mode)
+        .put("habitId", habitId ?: JSONObject.NULL),
     )
   }
 

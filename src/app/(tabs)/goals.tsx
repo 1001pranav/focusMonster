@@ -1,16 +1,18 @@
 import { router } from 'expo-router';
-import { addDays, today } from '@/domain/dates';
+import { addDays, formatMinutes, startOf, today } from '@/domain/dates';
+import { weeklyFocusByGoal } from '@/domain/focus';
 import { MAX_GOALS } from '@/domain/tasks';
-import { loadGoals, loadTasks } from '@/db/repo';
+import { loadFocusSessions, loadGoals, loadTasks } from '@/db/repo';
 import { useLoad } from '@/data/hooks';
 import { Button, Card, Row, Screen, Txt } from '@/ui/components';
 
 export default function Goals() {
   const data = useLoad(async () => {
-    const [goals, tasks] = await Promise.all([loadGoals(), loadTasks(addDays(today(), -6))]);
     const weekStart = addDays(today(), -6);
+    const [goals, tasks, sessions] = await Promise.all([loadGoals(), loadTasks(weekStart), loadFocusSessions(startOf(weekStart).getTime())]);
     const doneThisWeek = (id: string) => tasks.filter((t) => t.goalId === id && t.status === 'done' && t.day >= weekStart).length;
-    return goals.map((g) => ({ ...g, done: doneThisWeek(g.id) }));
+    const focus = weeklyFocusByGoal(sessions, tasks, today(), Date.now());
+    return goals.map((g) => ({ ...g, done: doneThisWeek(g.id), focusMin: focus[g.id] ?? 0 }));
   });
   if (!data) return <Screen>{null}</Screen>;
   return (
@@ -24,7 +26,7 @@ export default function Goals() {
               {g.title}
             </Txt>
             <Txt variant="label" muted>
-              {g.done} done this week
+              {g.done} done{g.focusMin >= 1 ? ` · ${formatMinutes(g.focusMin)} focused` : ''} this week
             </Txt>
           </Row>
           {g.why ? <Txt muted>“{g.why}”</Txt> : null}

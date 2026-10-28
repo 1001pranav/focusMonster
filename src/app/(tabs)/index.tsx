@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
@@ -10,7 +11,11 @@ import { changed } from '@/db/store';
 import { useToday, type TodayData } from '@/data/hooks';
 import { setGateWanted } from '@/services/lock';
 import { Button, Card, Chip, Field, Ring, Row, Screen, Txt } from '@/ui/components';
+import { ChallengeCard } from '@/ui/ChallengeCard';
+import { FocusCard } from '@/ui/FocusCard';
 import { GateSetup } from '@/ui/GateSetup';
+import { HabitsCard } from '@/ui/HabitsCard';
+import { ReflectionCard } from '@/ui/ReflectionCard';
 import { space, useTheme } from '@/ui/theme';
 
 export default function Today() {
@@ -27,9 +32,14 @@ export default function Today() {
       )}
       <Progress data={data} />
       <GateCard data={data} />
+      <ShortVideoCard data={data} />
       <WhyCard data={data} />
       <TopThree data={data} />
+      <FocusCard data={data} />
+      <HabitsCard data={data} />
+      <ChallengeCard data={data} />
       <Week data={data} />
+      <ReflectionCard data={data} />
       <Apps data={data} />
     </Screen>
   );
@@ -95,6 +105,50 @@ function GateCard({ data }: { data: TodayData }) {
           Most common reason: {REASON_LABELS[top.reason].toLowerCase()} ({top.count}).
         </Txt>
       ) : null}
+    </Card>
+  );
+}
+
+/** The count the user asked for from the start: Reels and Shorts watched today. */
+function ShortVideoCard({ data }: { data: TodayData }) {
+  // Never hidden: an empty card has to say why, or a broken counter looks like a good day.
+  if (!data.shortVideo.length) {
+    return (
+      <Card>
+        <Txt variant="heading">Short videos today</Txt>
+        <Txt muted>
+          {data.gate.serviceOn
+            ? 'No Reels or Shorts counted yet today. Watched some? Check the detection.'
+            : "Not counting: Reels and Shorts are counted by the Accessibility service, which is off. Turn it on in Settings → Mindful gate."}
+        </Txt>
+        {data.gate.serviceOn ? <Button title="Check detection" kind="plain" onPress={() => router.push('/detection')} /> : null}
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <Txt variant="heading">Short videos today</Txt>
+      {data.shortVideo.map((l) => (
+        <View key={l.label} style={{ gap: 2 }}>
+          <Row style={{ justifyContent: 'space-between', minHeight: 0 }}>
+            <Txt>{l.label}</Txt>
+            <Txt variant="label">
+              {l.count} · {formatMinutes(l.minutes)}
+            </Txt>
+          </Row>
+          {l.yesterday !== null ? (
+            <Txt variant="caption" muted>
+              {l.count <= l.yesterday ? `▼ ${l.yesterday - l.count} fewer` : `▲ ${l.count - l.yesterday} more`} than yesterday ({l.yesterday})
+            </Txt>
+          ) : null}
+          {l.blocked > 0 ? (
+            <Txt variant="caption" muted>
+              Blocked {l.blocked} {l.blocked === 1 ? 'time' : 'times'}
+            </Txt>
+          ) : null}
+        </View>
+      ))}
+      <Button title="Check detection" kind="plain" onPress={() => router.push('/detection')} />
     </Card>
   );
 }

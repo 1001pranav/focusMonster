@@ -1,6 +1,12 @@
 import type { AppTag } from '@/domain/apps';
+import { DEFAULT_BEDTIME, type Bedtime } from '@/domain/bedtime';
+import type { Challenge } from '@/domain/challenges';
+import type { FocusSession } from '@/domain/focus';
 import type { GateEvent } from '@/domain/gate';
+import type { Reflection } from '@/domain/review';
+import type { Habit, HabitLog } from '@/domain/habits';
 import { NO_PENDING, type Pending } from '@/domain/lock';
+import { DEFAULT_SHORTS, type ShortsPolicy, type ShortVideoDay } from '@/domain/shorts';
 import type { Day } from '@/domain/dates';
 import type { Plan } from '@/domain/target';
 import { newId, type Goal, type Task, type TaskStatus } from '@/domain/tasks';
@@ -18,9 +24,11 @@ export interface Settings {
   gateEnabled: boolean;
   /** Changes that weaken a protection, waiting out the 24-hour lock (src/domain/lock.ts). */
   pending: Pending;
+  shorts: ShortsPolicy;
+  bedtime: Bedtime;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
@@ -165,16 +173,140 @@ export async function saveGateEvents(events: GateEvent[]): Promise<void> {
   const db = await getDb();
   await db.withExclusiveTransactionAsync(async (tx) => {
     for (const e of events) {
-      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec) VALUES (?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec]);
+      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec, kind, habit_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec, e.kind, e.habitId]);
     }
   });
 }
 
 export async function loadGateEvents(sinceMs: number): Promise<GateEvent[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number }>(
+  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number; kind: GateEvent['kind']; habit_id: string | null }>(
     'SELECT * FROM gate_events WHERE at >= ? ORDER BY at',
     [sinceMs],
   );
-  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec }));
+  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec, kind: r.kind, habitId: r.habit_id }));
+}
+
+// Short videos
+
+/** Replaces the given days' rows: the native counter is the source of truth while it still has them. */
+export async function saveShortVideo(rows: ShortVideoDay[]): Promise<void> {
+  if (!rows.length) return;
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    for (const r of rows) {
+      await tx.runAsync('INSERT OR REPLACE INTO short_video (day, package, count, ms, blocked) VALUES (?, ?, ?, ?, ?)', [r.day, r.packageName, r.count, r.ms, r.blocked]);
+    }
+  });
+}
+
+export async function loadShortVideo(fromDay: Day): Promise<ShortVideoDay[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ day: Day; package: string; count: number; ms: number; blocked: number }>('SELECT * FROM short_video WHERE day >= ?', [fromDay]);
+  return rows.map((r) => ({ day: r.day, packageName: r.package, count: r.count, ms: r.ms, blocked: r.blocked }));
+}
+
+// Focus sessions
+
+interface FocusRow {
+  id: string;
+  task_id: string | null;
+  goal_id: string | null;
+  started_at: number;
+  planned_end: number;
+  ended_at: number | null;
+}
+
+const toSession = (r: FocusRow): FocusSession => ({ id: r.id, taskId: r.task_id, goalId: r.goal_id, startedAt: r.started_at, plannedEnd: r.planned_end, endedAt: r.ended_at });
+
+export async function loadFocusSessions(sinceMs: number): Promise<FocusSession[]> {
+  const db = await getDb();
+  return (await db.getAllAsync<FocusRow>('SELECT * FROM focus_sessions WHERE started_at >= ? ORDER BY started_at', [sinceMs])).map(toSession);
+}
+
+export async function addFocusSession(s: FocusSession): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO focus_sessions (id, task_id, goal_id, started_at, planned_end, ended_at) VALUES (?, ?, ?, ?, ?, NULL)', [s.id, s.taskId, s.goalId, s.startedAt, s.plannedEnd]);
+}
+
+/** Ends whichever session is running at `at`. */
+export async function endRunningFocus(at: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE focus_sessions SET ended_at = ? WHERE ended_at IS NULL AND started_at <= ? AND planned_end > ?', [at, at, at]);
+}
+
+// Habits
+
+export async function loadHabits(): Promise<Habit[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; title: string; created_at: number }>('SELECT * FROM habits WHERE archived = 0 ORDER BY created_at');
+  return rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at }));
+}
+
+export async function addHabit(title: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO habits (id, title, created_at) VALUES (?, ?, ?)', [newId(), title, Date.now()]);
+}
+
+export async function archiveHabit(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [id]);
+}
+
+export async function loadHabitLogs(fromDay: Day): Promise<HabitLog[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ habit_id: string; day: Day }>('SELECT * FROM habit_logs WHERE day >= ?', [fromDay]);
+  return rows.map((r) => ({ habitId: r.habit_id, day: r.day }));
+}
+
+export async function setHabitDone(habitId: string, day: Day, done: boolean): Promise<void> {
+  const db = await getDb();
+  if (done) await db.runAsync('INSERT OR IGNORE INTO habit_logs (habit_id, day) VALUES (?, ?)', [habitId, day]);
+  else await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND day = ?', [habitId, day]);
+}
+
+// Reflections
+
+export async function saveReflection(day: Day, text: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT OR REPLACE INTO reflections (day, text, created_at) VALUES (?, ?, ?)', [day, text, Date.now()]);
+}
+
+export async function loadReflections(fromDay: Day): Promise<Reflection[]> {
+  const db = await getDb();
+  return db.getAllAsync<Reflection>('SELECT day, text FROM reflections WHERE day >= ? ORDER BY day', [fromDay]);
+}
+
+// Challenges
+
+/** The most recent challenge, finished or not. */
+export async function loadLatestChallenge(): Promise<Challenge | null> {
+  const db = await getDb();
+  const r = await db.getFirstAsync<{ id: string; type: string; start_day: Day; ended: number }>('SELECT * FROM challenges ORDER BY created_at DESC LIMIT 1');
+  return r ? { id: r.id, type: r.type, startDay: r.start_day, ended: r.ended === 1 } : null;
+}
+
+/** Starts a challenge; the previous one, if still open, ends. */
+export async function startChallengeRow(type: string, startDay: Day): Promise<void> {
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync('UPDATE challenges SET ended = 1 WHERE ended = 0');
+    await tx.runAsync('INSERT INTO challenges (id, type, start_day, created_at) VALUES (?, ?, ?, ?)', [newId(), type, startDay, Date.now()]);
+  });
+}
+
+export async function endChallenge(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE challenges SET ended = 1 WHERE id = ?', [id]);
+}
+
+export async function loadChallengeDays(id: string): Promise<Record<Day, boolean>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ day: Day; passed: number }>('SELECT day, passed FROM challenge_days WHERE challenge_id = ?', [id]);
+  return Object.fromEntries(rows.map((r) => [r.day, r.passed === 1]));
+}
+
+export async function saveChallengeDay(id: string, day: Day, passed: boolean): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT OR REPLACE INTO challenge_days (challenge_id, day, passed) VALUES (?, ?, ?)', [id, day, passed ? 1 : 0]);
 }

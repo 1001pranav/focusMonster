@@ -2,20 +2,38 @@ import { configureGate, drainGateLog } from '../../modules/usage-stats/gate';
 import type { GateChoice, GateEvent, GateReason } from '@/domain/gate';
 import { gateWhy, nextTask } from '@/domain/gate';
 import { DEFAULT_WASTED, type AppTag } from '@/domain/apps';
+import type { Bedtime } from '@/domain/bedtime';
 import type { Day } from '@/domain/dates';
+import type { FocusSession } from '@/domain/focus';
+import { HABITS_ON_GATE, type Habit } from '@/domain/habits';
 import type { Pending } from '@/domain/lock';
+import type { ShortsPolicy } from '@/domain/shorts';
 import type { Goal, Task } from '@/domain/tasks';
-import { saveGateEvents } from '@/db/repo';
+import { endRunningFocus, saveGateEvents } from '@/db/repo';
 
-/** Moves the gate's decisions from the native log into SQLite. */
+const KINDS = new Set(['open', 'break', 'focus']);
+
+/**
+ * Moves the gate's decisions from the native log into SQLite. A focus session ended from the gate
+ * arrives here too, as 'focus_end', and ends the session in the database.
+ */
 export async function importGateLog(): Promise<void> {
-  const events: GateEvent[] = drainGateLog().map((e) => ({
-    at: e.at,
-    packageName: e.package,
-    reason: e.reason as GateReason | null,
-    choice: e.choice as GateChoice,
-    waitSec: e.waitSec,
-  }));
+  const events: GateEvent[] = [];
+  for (const e of drainGateLog()) {
+    if (e.choice === 'focus_end') {
+      await endRunningFocus(e.at);
+      continue;
+    }
+    events.push({
+      at: e.at,
+      packageName: e.package,
+      reason: e.reason as GateReason | null,
+      choice: e.choice as GateChoice,
+      waitSec: e.waitSec,
+      kind: (e.kind && KINDS.has(e.kind) ? e.kind : 'open') as GateEvent['kind'],
+      habitId: e.habitId ?? null,
+    });
+  }
   await saveGateEvents(events);
 }
 
@@ -23,7 +41,7 @@ export async function importGateLog(): Promise<void> {
  * Hands the gate what it shows. It reads this while the app is closed, so the target is today's as
  * of the last time the app was opened; a new day keeps yesterday's until then.
  */
-export function pushGateConfig(input: { enabled: boolean; pending: Pending; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
+export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; focus: FocusSession | null; habits: Habit[]; nextIfHit: number; morningAt: string; nightAt: string; bedtime: Bedtime; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
   const task = nextTask(input.tasks, input.day);
   configureGate({
     enabled: input.enabled,
@@ -31,7 +49,20 @@ export function pushGateConfig(input: { enabled: boolean; pending: Pending; tags
     offAt: input.pending.gateOffAt ?? 0,
     wasted: wastedPackages(input.tags),
     releaseAt: input.pending.untagAt,
+    shorts: input.shorts,
+    shortsNext: input.pending.shortsNext ?? null,
+    focusUntil: input.focus?.plannedEnd ?? 0,
+    focusTask: input.tasks.find((t) => t.id === input.focus?.taskId)?.title ?? null,
+    instead: input.habits.slice(0, HABITS_ON_GATE).map((h) => ({ id: h.id, title: h.title })),
+    // The native side picks tomorrow's target itself from these, before the app is opened again.
+    day: input.day,
     targetMin: Math.round(input.targetMin),
+    ifHitMin: Math.round(input.nextIfHit),
+    ifMissMin: Math.round(input.targetMin),
+    morningAt: input.morningAt,
+    nightAt: input.nightAt,
+    bedtime: input.bedtime,
+    bedtimeNext: input.pending.bedtimeNext ?? null,
     nextTask: task?.title ?? null,
     why: gateWhy(input.goals, task),
   });
