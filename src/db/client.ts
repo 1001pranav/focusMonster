@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { MIGRATIONS } from './schema';
+import { serialize } from './serialize';
 
 let opening: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -14,10 +15,10 @@ async function open(): Promise<SQLite.SQLiteDatabase> {
       await tx.execAsync(`PRAGMA user_version = ${v + 1}`);
     });
   }
-  return db;
+  return serialize(db);
 }
 
-/** The one shared connection, migrated on first use. */
+/** The one shared connection, migrated on first use. Its calls run one at a time (see serialize). */
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   opening ??= open().catch((e) => {
     opening = null;
