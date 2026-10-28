@@ -53,10 +53,13 @@ class FocusAccessibilityService : AccessibilityService() {
     // A focus session closes every wasted app, whether or not the gate is switched on, and an
     // earlier "Continue" doesn't count.
     val focusBlocked = config.focusActive(now) && pkg in config.wasted
-    val gated = !focusBlocked && config.gates(pkg, now)
+    // Bedtime uses the gate's "allowed" memory, so "Open anyway" lasts the visit; a focus session doesn't.
+    val minute = java.util.Calendar.getInstance().let { it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE) }
+    val bedtime = !focusBlocked && pkg in config.wasted && config.quietHours(now).active(minute)
+    val gated = !focusBlocked && (bedtime || config.gates(pkg, now))
     val prev = lastWindow
     lastWindow = pkg
-    if (Gate.rules.onForeground(pkg, now, gated)) openGate(pkg, GateActivity.MODE_OPEN)
+    if (Gate.rules.onForeground(pkg, now, gated)) openGate(pkg, if (bedtime) GateActivity.MODE_BEDTIME else GateActivity.MODE_OPEN)
     if (focusBlocked && pkg != prev) openGate(pkg, GateActivity.MODE_FOCUS)
 
     if (pkg == foreground) {

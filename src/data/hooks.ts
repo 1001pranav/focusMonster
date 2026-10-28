@@ -92,7 +92,7 @@ export function useToday(): TodayData | null {
     const justDone =
       [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
     const pickedAtGate = new Set(gateEvents.filter((e) => e.choice === 'instead').map((e) => e.habitId));
-    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, tasks, goals, day });
+    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, bedtime: settings.bedtime, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)
