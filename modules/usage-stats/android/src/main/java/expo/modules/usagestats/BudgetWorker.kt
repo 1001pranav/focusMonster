@@ -29,6 +29,7 @@ class BudgetWorker(context: Context, params: WorkerParameters) : Worker(context,
   override fun doWork(): Result {
     val context = applicationContext
     val config = GateStore.config(context)
+    runCatching { BudgetWidget.updateAll(context) }
     if (config.plan.day.isEmpty()) return Result.success()
     val now = System.currentTimeMillis()
     val numbers = TodayNumbers.measure(context, config, now)

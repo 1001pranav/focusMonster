@@ -35,7 +35,12 @@ class FocusGateModule : Module() {
       )
     }
 
-    Function("configure") { json: String -> GateStore.saveConfig(context, json) }
+    Function("configure") { json: String ->
+      GateStore.saveConfig(context, json)
+      // Measuring usage for the widget takes a moment: off the JS thread.
+      val app = context.applicationContext
+      Thread { runCatching { BudgetWidget.updateAll(app) } }.start()
+    }
 
     Function("drainLog") { GateStore.drainLog(context) }
 

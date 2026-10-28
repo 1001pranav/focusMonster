@@ -31,5 +31,15 @@
       android:screenOrientation="portrait"
       android:taskAffinity="focusmonster.gate"
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
+    <receiver
+      android:name="expo.modules.usagestats.BudgetWidget"
+      android:exported="false"
+      android:label="@string/focus_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/focus_widget_info" />
+    </receiver>
   </application>
 </manifest>

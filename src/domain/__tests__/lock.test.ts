@@ -1,4 +1,4 @@
-import { cancelShorts, requestShorts, cancelGateOff, cancelUntag, LOCK_MS, NO_PENDING, requestGateOff, requestUntag, takeDue, timeUntil } from '../lock';
+import { requestBedtime, cancelShorts, requestShorts, cancelGateOff, cancelUntag, LOCK_MS, NO_PENDING, requestGateOff, requestUntag, takeDue, timeUntil } from '../lock';
 
 describe('commitment lock', () => {
   it('turns the gate off a day after asking', () => {
@@ -49,5 +49,12 @@ describe('commitment lock', () => {
 
   it('reads pending data saved before Reels/Shorts existed', () => {
     expect(takeDue({ gateOffAt: null, untagAt: {} }, 0).shorts).toBeNull();
+  });
+
+  it('switches to a weaker bedtime a day later', () => {
+    const later = { enabled: true, start: '01:00', end: '07:00', morningFreeMin: 0 };
+    const p = requestBedtime(NO_PENDING, later, 0);
+    expect(takeDue(p, LOCK_MS - 1).bedtime).toBeNull();
+    expect(takeDue(p, LOCK_MS).bedtime).toEqual(later);
   });
 });

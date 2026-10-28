@@ -45,6 +45,8 @@ export interface GateConfig {
   /** 'HH:MM' of the morning plan and nightly recap, posted by the background worker. */
   morningAt: string;
   nightAt: string;
+  bedtime: { enabled: boolean; start: string; end: string; morningFreeMin: number };
+  bedtimeNext: { enabled: boolean; start: string; end: string; morningFreeMin: number; at: number } | null;
   nextTask: string | null;
   why: string | null;
 }

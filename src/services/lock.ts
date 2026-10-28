@@ -1,14 +1,15 @@
 import type { AppTag } from '@/domain/apps';
-import { cancelGateOff, cancelUntag, requestGateOff, requestUntag, takeDue } from '@/domain/lock';
+import { isWeaker, type Bedtime } from '@/domain/bedtime';
+import { cancelBedtime, cancelGateOff, cancelUntag, requestBedtime, requestGateOff, requestUntag, takeDue } from '@/domain/lock';
 import { loadSettings, loadTags, saveSettings, setTags } from '@/db/repo';
 
 /** Applies the pending changes whose 24 hours are up. The native gate already honours them on time. */
 export async function applyDuePending(): Promise<void> {
   const settings = await loadSettings();
-  const { gateOff, untag, shorts, rest } = takeDue(settings.pending, Date.now());
-  if (!gateOff && !untag.length && !shorts) return;
+  const { gateOff, untag, shorts, bedtime, rest } = takeDue(settings.pending, Date.now());
+  if (!gateOff && !untag.length && !shorts && !bedtime) return;
   if (untag.length) await setTags(Object.fromEntries(untag.map((pkg) => [pkg, 'neutral' as AppTag])));
-  await saveSettings({ pending: rest, ...(gateOff ? { gateEnabled: false } : {}), ...(shorts ? { shorts } : {}) });
+  await saveSettings({ pending: rest, ...(gateOff ? { gateEnabled: false } : {}), ...(shorts ? { shorts } : {}), ...(bedtime ? { bedtime } : {}) });
 }
 
 /** On is immediate; off waits 24 hours. Turning it back on cancels a pending off. */
@@ -36,4 +37,11 @@ export async function saveWastedChoice(wanted: Record<string, boolean>): Promise
   }
   await setTags(now);
   await saveSettings({ pending });
+}
+
+/** Stricter bedtimes apply at once; any change that frees a protected minute waits 24 hours. */
+export async function setBedtime(next: Bedtime): Promise<void> {
+  const { bedtime, pending } = await loadSettings();
+  if (isWeaker(bedtime, next)) await saveSettings({ pending: requestBedtime(pending, next, Date.now()) });
+  else await saveSettings({ bedtime: next, pending: cancelBedtime(pending) });
 }

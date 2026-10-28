@@ -1,3 +1,4 @@
+import type { Bedtime } from './bedtime';
 import type { ShortsPolicy } from './shorts';
 
 /**
@@ -14,9 +15,11 @@ export interface Pending {
   untagAt: Record<string, number>;
   /** A weaker Reels/Shorts policy, and when it starts. Missing in data saved before it existed. */
   shortsNext?: (ShortsPolicy & { at: number }) | null;
+  /** A weaker bedtime, and when it starts. */
+  bedtimeNext?: (Bedtime & { at: number }) | null;
 }
 
-export const NO_PENDING: Pending = { gateOffAt: null, untagAt: {}, shortsNext: null };
+export const NO_PENDING: Pending = { gateOffAt: null, untagAt: {}, shortsNext: null, bedtimeNext: null };
 
 /** A second request doesn't restart the clock. */
 export const requestGateOff = (p: Pending, now: number): Pending => ({ ...p, gateOffAt: p.gateOffAt ?? now + LOCK_MS });
@@ -33,20 +36,27 @@ export function cancelUntag(p: Pending, pkg: string): Pending {
 /** A later weaker request replaces the policy but keeps the original deadline. */
 export const requestShorts = (p: Pending, policy: ShortsPolicy, now: number): Pending => ({ ...p, shortsNext: { ...policy, at: p.shortsNext?.at ?? now + LOCK_MS } });
 
+export const requestBedtime = (p: Pending, bedtime: Bedtime, now: number): Pending => ({ ...p, bedtimeNext: { ...bedtime, at: p.bedtimeNext?.at ?? now + LOCK_MS } });
+
+export const cancelBedtime = (p: Pending): Pending => ({ ...p, bedtimeNext: null });
+
 export const cancelShorts = (p: Pending): Pending => ({ ...p, shortsNext: null });
 
 /** The changes whose time has come, and what stays pending. */
-export function takeDue(p: Pending, now: number): { gateOff: boolean; untag: string[]; shorts: ShortsPolicy | null; rest: Pending } {
+export function takeDue(p: Pending, now: number): { gateOff: boolean; untag: string[]; shorts: ShortsPolicy | null; bedtime: Bedtime | null; rest: Pending } {
   const gateOff = p.gateOffAt !== null && p.gateOffAt <= now;
   const untag = Object.keys(p.untagAt).filter((pkg) => p.untagAt[pkg] <= now);
   const untagAt = Object.fromEntries(Object.entries(p.untagAt).filter(([, at]) => at > now));
   const next = p.shortsNext ?? null;
   const shortsDue = next !== null && next.at <= now;
+  const bed = p.bedtimeNext ?? null;
+  const bedDue = bed !== null && bed.at <= now;
   return {
     gateOff,
     untag,
     shorts: shortsDue ? { mode: next.mode, limit: next.limit } : null,
-    rest: { gateOffAt: gateOff ? null : p.gateOffAt, untagAt, shortsNext: shortsDue ? null : next },
+    bedtime: bedDue ? { enabled: bed.enabled, start: bed.start, end: bed.end, morningFreeMin: bed.morningFreeMin } : null,
+    rest: { gateOffAt: gateOff ? null : p.gateOffAt, untagAt, shortsNext: shortsDue ? null : next, bedtimeNext: bedDue ? null : bed },
   };
 }
 

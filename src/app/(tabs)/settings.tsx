@@ -6,10 +6,11 @@ import { gateServiceEnabled } from '../../../modules/usage-stats/gate';
 import { formatMinutes } from '@/domain/dates';
 import { timeUntil } from '@/domain/lock';
 import { LIMIT_CHOICES, type ShortsPolicy } from '@/domain/shorts';
+import { hhmmOf, minuteOf, MORNING_FREE_CHOICES, opensAt, type Bedtime } from '@/domain/bedtime';
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
-import { setGateWanted } from '@/services/lock';
+import { setBedtime, setGateWanted } from '@/services/lock';
 import { setShortsPolicy } from '@/services/shorts';
 import { ensurePermission } from '@/services/notifications';
 import { Card, Chip, Row, Screen, Stepper, Txt } from '@/ui/components';
@@ -97,6 +98,7 @@ export default function Settings() {
           />
         </Row>
       </Card>
+      <BedtimeSettings bedtime={settings.bedtime} next={settings.pending.bedtimeNext ?? null} now={now} />
       <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} serviceOn={serviceOn} now={now} />
       <Card>
         <Txt variant="heading">Morning plan</Txt>
@@ -154,5 +156,51 @@ function ShortsSettings({ policy, next, serviceOn, now }: { policy: ShortsPolicy
       </Card>
       {!serviceOn ? <GateSetup /> : null}
     </>
+  );
+}
+
+/** Bedtime start runs 19:00 to 02:00 (stored modulo a day), wake-up 04:00 to 11:00. */
+const START_MIN = 19 * 60;
+const START_MAX = 26 * 60;
+const toStartValue = (hhmm: string) => {
+  const m = minuteOf(hhmm);
+  return m < START_MIN ? m + 24 * 60 : m;
+};
+
+function BedtimeSettings({ bedtime, next, now }: { bedtime: Bedtime; next: (Bedtime & { at: number }) | null; now: number }) {
+  const { colors } = useTheme();
+  const shown = next ?? bedtime;
+  const set = (patch: Partial<Bedtime>) => setBedtime({ enabled: shown.enabled, start: shown.start, end: shown.end, morningFreeMin: shown.morningFreeMin, ...patch }).then(changed);
+  return (
+    <Card>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <Txt variant="heading">Bedtime</Txt>
+          <Txt variant="caption" muted>
+            {shown.enabled ? `Wasted apps closed ${shown.start} to ${opensAt(shown)}` : 'Off'}
+          </Txt>
+        </View>
+        <Switch accessibilityLabel="Bedtime" value={shown.enabled} onValueChange={(enabled) => set({ enabled })} trackColor={{ true: colors.primary, false: colors.track }} />
+      </Row>
+      {shown.enabled ? (
+        <>
+          <Txt variant="label">Starts</Txt>
+          <Stepper value={toStartValue(shown.start)} onChange={(v) => set({ start: hhmmOf(v) })} step={30} min={START_MIN} max={START_MAX} format={hhmmOf} />
+          <Txt variant="label">Wake up</Txt>
+          <Stepper value={minuteOf(shown.end)} onChange={(v) => set({ end: hhmmOf(v) })} step={30} min={4 * 60} max={11 * 60} format={hhmmOf} />
+          <Txt variant="label">Phone-free after waking</Txt>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {MORNING_FREE_CHOICES.map((m) => (
+              <Chip key={m} label={m ? `${m} min` : 'None'} selected={shown.morningFreeMin === m} onPress={() => set({ morningFreeMin: m })} />
+            ))}
+          </View>
+        </>
+      ) : null}
+      {next ? (
+        <Txt variant="caption" muted>
+          This frees time that bedtime covers now, so it starts {timeUntil(next.at, now)}. Until then: {bedtime.enabled ? `${bedtime.start} to ${opensAt(bedtime)}` : 'off'}.
+        </Txt>
+      ) : null}
+    </Card>
   );
 }

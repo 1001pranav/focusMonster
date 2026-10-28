@@ -37,7 +37,13 @@ data class GateConfig(
   /** 'HH:MM' times of the morning plan and nightly recap notifications. */
   val morningAt: String = "08:00",
   val nightAt: String = "21:30",
+  val quiet: QuietHours = QuietHours.OFF,
+  /** A weaker bedtime waiting out the 24-hour lock, and when it starts. */
+  val quietNext: QuietHours? = null,
+  val quietNextAt: Long = 0,
 ) {
+  fun quietHours(now: Long): QuietHours = if (quietNext != null && now >= quietNextAt) quietNext else quiet
+
   fun focusActive(now: Long) = now < focusUntil
 
   fun shortsPolicy(now: Long): ShortsPolicy = if (shortsNext != null && now >= shortsNextAt) shortsNext else shorts
@@ -94,6 +100,9 @@ object GateStore {
       plan = TargetPlan(o.optString("day"), o.optInt("targetMin", 0), o.optInt("ifHitMin", o.optInt("targetMin", 0)), o.optInt("ifMissMin", o.optInt("targetMin", 0))),
       morningAt = o.optString("morningAt", "08:00"),
       nightAt = o.optString("nightAt", "21:30"),
+      quiet = o.optJSONObject("bedtime")?.let(::quiet) ?: QuietHours.OFF,
+      quietNext = o.optJSONObject("bedtimeNext")?.let(::quiet),
+      quietNextAt = o.optJSONObject("bedtimeNext")?.optLong("at", 0) ?: 0,
       instead = (o.optJSONArray("instead") ?: JSONArray()).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { h -> h.getString("id") to h.getString("title") } } },
     )
   }
@@ -105,6 +114,9 @@ object GateStore {
     val o = runCatching { JSONObject(json) }.getOrNull() ?: return
     saveConfig(context, o.put("focusUntil", now).toString())
   }
+
+  private fun quiet(o: JSONObject) =
+    QuietHours(o.optBoolean("enabled"), Budget.minuteOf(o.optString("start", "23:00")), Budget.minuteOf(o.optString("end", "07:00")), o.optInt("morningFreeMin", 0))
 
   private fun policy(o: JSONObject) = ShortsPolicy(o.optString("mode", ShortsPolicy.PAUSE), o.optInt("limit", 20))
 

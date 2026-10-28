@@ -33,6 +33,8 @@ class GateActivity : Activity() {
     const val MODE_BREAK = "break"
     /** A wasted app opened during a focus session: no reason, no Continue, only ending the session. */
     const val MODE_FOCUS = "focus"
+    /** A wasted app during bedtime: "Go to sleep", or open it anyway after a long wait. */
+    const val MODE_BEDTIME = "bedtime"
 
     /** Stored keys; the JS side (src/domain/gate.ts) has the matching labels. */
     private val REASONS = listOf(
@@ -77,6 +79,7 @@ class GateActivity : Activity() {
     // A break mid-scroll is never shorter than 10 s: it has to outlast the urge to swipe.
     waitTotal = when (mode) {
       MODE_FOCUS -> 10
+      MODE_BEDTIME -> 30
       MODE_BREAK -> maxOf(10, GateRules.waitSeconds(ratio))
       else -> GateRules.waitSeconds(ratio)
     }
@@ -118,6 +121,7 @@ class GateActivity : Activity() {
     }
     val label = appLabel()
     if (mode == MODE_FOCUS) return focusLayout(column, config, label)
+    if (mode == MODE_BEDTIME) return bedtimeLayout(column, config, label)
     if (mode == MODE_BREAK) {
       val reels = intent.getIntExtra(EXTRA_REELS, 0)
       val since = intent.getLongExtra(EXTRA_SINCE, System.currentTimeMillis())
@@ -206,6 +210,27 @@ class GateActivity : Activity() {
     }
   }
 
+  private fun bedtimeLayout(column: LinearLayout, config: GateConfig, label: String): View {
+    column.addView(text("It's bedtime", 26f, TEXT, bold = true))
+    column.addView(space(8))
+    column.addView(text("$label opens again at ${config.quietHours(System.currentTimeMillis()).opensAt()}. Scrolling now borrows from tomorrow's energy.", 17f, MUTED))
+    config.why?.let {
+      column.addView(space(24))
+      column.addView(text("WHY YOU STARTED", 12f, MUTED, bold = true))
+      column.addView(text("“$it”", 17f, TEXT))
+    }
+    column.addView(space(32))
+    column.addView(button("Go to sleep", PRIMARY, PRIMARY_TEXT) { close() })
+    column.addView(space(12))
+    continueButton = button("", SURFACE, TEXT) { proceed() }
+    column.addView(continueButton)
+    updateContinue()
+    return ScrollView(this).apply {
+      setBackgroundColor(BG)
+      addView(column)
+    }
+  }
+
   private fun reasonChips(): View {
     val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     REASONS.chunked(2).forEach { row ->
@@ -248,6 +273,12 @@ class GateActivity : Activity() {
 
   private fun updateContinue() {
     if (!::continueButton.isInitialized) return
+    if (mode == MODE_BEDTIME) {
+      continueButton.isEnabled = waitLeft == 0
+      continueButton.alpha = if (waitLeft == 0) 1f else 0.5f
+      continueButton.text = if (waitLeft > 0) "Open anyway in ${waitLeft}s" else "Open anyway"
+      return
+    }
     if (mode == MODE_FOCUS) {
       continueButton.isEnabled = waitLeft == 0
       continueButton.alpha = if (waitLeft == 0) 1f else 0.5f

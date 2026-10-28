@@ -53,6 +53,12 @@ A WorkManager job runs about every 15 minutes (Android's minimum; Doze can stret
 
 The JS side sends today's target together with what tomorrow's would be after a hit or a miss. On a new day the native side checks yesterday's usage and picks one, so the gate and the notifications are correct before FocusMonster is opened.
 
+## Bedtime and widget
+
+- **Bedtime** (off by default; 23:00–07:00 plus 0, 30 or 60 phone-free minutes after waking): opening a wasted app shows "It's bedtime. Instagram opens again at 07:30" with *Go to sleep*. *Open anyway* is available after a 30 s wait and lasts that visit.
+- Any change that frees a minute bedtime covers now, including moving the window, waits out the 24-hour lock.
+- **Home-screen widget:** "2h 10m left · of 5h 40m · 34 short videos", orange once you're over. The background worker refreshes it, and so does every config push from the app.
+
 ## Commitment lock
 
 Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.

@@ -1,4 +1,5 @@
 import type { AppTag } from '@/domain/apps';
+import { DEFAULT_BEDTIME, type Bedtime } from '@/domain/bedtime';
 import type { FocusSession } from '@/domain/focus';
 import type { GateEvent } from '@/domain/gate';
 import type { Habit, HabitLog } from '@/domain/habits';
@@ -22,9 +23,10 @@ export interface Settings {
   /** Changes that weaken a protection, waiting out the 24-hour lock (src/domain/lock.ts). */
   pending: Pending;
   shorts: ShortsPolicy;
+  bedtime: Bedtime;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
