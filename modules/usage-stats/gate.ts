@@ -22,7 +22,11 @@ export const openAppDetails = () => native?.openAppDetails();
 
 export interface GateConfig {
   enabled: boolean;
+  /** Epoch ms when the gate turns itself off; 0 for never. */
+  offAt: number;
   wasted: string[];
+  /** Wasted apps on their way out, with the epoch ms they stop being gated. */
+  releaseAt: Record<string, number>;
   targetMin: number;
   nextTask: string | null;
   why: string | null;

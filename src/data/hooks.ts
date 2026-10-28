@@ -11,6 +11,7 @@ import type { Goal, Task } from '@/domain/tasks';
 import { loadAppLabels, loadDailyUsage, loadGateEvents, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
 import { useStore } from '@/db/store';
 import { importGateLog, pushGateConfig } from '@/services/gate';
+import { applyDuePending } from '@/services/lock';
 import { syncFinishedDays, usageSameTimeLastWeek, usageSoFar } from '@/services/usage';
 
 /** Runs `load` on mount, after every database write, and when the app comes back to the foreground. */
@@ -59,6 +60,7 @@ export interface TodayData {
 
 export function useToday(): TodayData | null {
   return useLoad(async () => {
+    await applyDuePending();
     const settings = await loadSettings();
     const plan = settings.plan;
     const day = today();
@@ -69,7 +71,7 @@ export function useToday(): TodayData | null {
     const wastedByDay = Object.fromEntries(Object.entries(stored).map(([d, u]) => [d, wastedMinutes(u, tags)]));
     const { days, todayTarget } = plan ? evaluate(plan, wastedByDay, day) : { days: [], todayTarget: 0 };
     const gateEvents = await loadGateEvents(startOf(day).getTime());
-    pushGateConfig({ enabled: settings.gateEnabled, tags, targetMin: todayTarget, tasks, goals, day });
+    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, tags, targetMin: todayTarget, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)

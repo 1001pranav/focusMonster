@@ -17,9 +17,9 @@ class FocusAccessibilityService : AccessibilityService() {
   override fun onAccessibilityEvent(event: AccessibilityEvent) {
     if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
     val pkg = event.packageName?.toString() ?: return
-    val config = GateStore.config(this)
-    val gated = config.enabled && pkg in config.wasted
-    if (Gate.rules.onForeground(pkg, System.currentTimeMillis(), gated)) {
+    val now = System.currentTimeMillis()
+    val gated = GateStore.config(this).gates(pkg, now)
+    if (Gate.rules.onForeground(pkg, now, gated)) {
       // Allowed from the background: a running accessibility service exempts its app.
       startActivity(
         Intent(this, GateActivity::class.java)

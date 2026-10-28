@@ -27,7 +27,8 @@ export function useAppList(): { apps: ListedApp[]; tags: Record<string, AppTag> 
   });
 }
 
-export function AppTagList({ apps, tags, onChange }: { apps: ListedApp[]; tags: Record<string, AppTag>; onChange: (packageName: string, tag: AppTag) => void }) {
+/** `notes` replace an app's usage line, e.g. to say a change is waiting out the 24-hour lock. */
+export function AppTagList({ apps, tags, onChange, notes = {} }: { apps: ListedApp[]; tags: Record<string, AppTag>; onChange: (packageName: string, tag: AppTag) => void; notes?: Record<string, string> }) {
   const { colors } = useTheme();
   return (
     <Card style={{ gap: 0, paddingVertical: space.sm }}>
@@ -36,9 +37,15 @@ export function AppTagList({ apps, tags, onChange }: { apps: ListedApp[]; tags: 
           <Row style={{ paddingVertical: space.xs }}>
             <View style={{ flex: 1 }}>
               <Txt numberOfLines={1}>{a.label}</Txt>
-              <Txt variant="caption" muted>
-                {a.avgMin >= 1 ? `${formatMinutes(a.avgMin)} a day` : 'Barely used'}
-              </Txt>
+              {notes[a.packageName] ? (
+                <Txt variant="caption" style={{ color: colors.over }}>
+                  {notes[a.packageName]}
+                </Txt>
+              ) : (
+                <Txt variant="caption" muted>
+                  {a.avgMin >= 1 ? `${formatMinutes(a.avgMin)} a day` : 'Barely used'}
+                </Txt>
+              )}
             </View>
             <Switch
               accessibilityLabel={`Count ${a.label} as wasted time`}

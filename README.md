@@ -30,6 +30,14 @@ All data stays on the phone. There is no account and no backend.
 - Every decision is logged, and Today shows how often the gate paused you, how often you turned back, and your most common reason.
 - It runs as an Accessibility service that only listens for which app is opening. It never reads screen content. Turn it on in Settings → Mindful gate. On Android 13+, a sideloaded APK also needs App info → ⋮ → **Allow restricted settings**.
 
+## Commitment lock
+
+Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.
+
+- Turning the mindful gate **off** takes effect 24 hours later. Turning it on, or cancelling, is immediate.
+- **Removing** an app from the wasted list takes 24 hours, and the app is still counted and gated until then. Adding one is immediate.
+- The native gate keeps track of these deadlines itself, so they take effect on time even if FocusMonster isn't opened.
+
 ## Development
 
 This app needs a development build, because Expo Go doesn't include the usage-stats module.

@@ -5,9 +5,10 @@ import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-
 import { addDays, formatMinutes, startOf } from '@/domain/dates';
 import { REASON_LABELS } from '@/domain/gate';
 import { leftOver, slotsLeft, type Task } from '@/domain/tasks';
-import { addTask, moveTask, saveSettings, setTaskStatus } from '@/db/repo';
+import { addTask, moveTask, setTaskStatus } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useToday, type TodayData } from '@/data/hooks';
+import { setGateWanted } from '@/services/lock';
 import { Button, Card, Chip, Field, Ring, Row, Screen, Txt } from '@/ui/components';
 import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
@@ -76,7 +77,7 @@ function GateCard({ data }: { data: TodayData }) {
       <Card>
         <Txt variant="heading">Add a pause before wasted apps</Txt>
         <Txt muted>Opening one shows a short wait and asks why. The pause gets longer as today's budget runs out.</Txt>
-        <Button title="Turn on the mindful gate" kind="secondary" onPress={() => saveSettings({ gateEnabled: true }).then(changed)} />
+        <Button title="Turn on the mindful gate" kind="secondary" onPress={() => setGateWanted(true).then(changed)} />
       </Card>
     );
   }

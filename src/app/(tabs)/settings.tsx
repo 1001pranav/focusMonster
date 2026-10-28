@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Switch, View } from 'react-native';
+import { Alert, Switch, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
 import { gateServiceEnabled } from '../../../modules/usage-stats/gate';
 import { formatMinutes } from '@/domain/dates';
+import { timeUntil } from '@/domain/lock';
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
+import { setGateWanted } from '@/services/lock';
 import { ensurePermission, scheduleDaily } from '@/services/notifications';
 import { Card, Row, Screen, Stepper, Txt } from '@/ui/components';
 import { GateSetup } from '@/ui/GateSetup';
@@ -21,10 +23,28 @@ const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')
 
 export default function Settings() {
   const { colors } = useTheme();
-  const loaded = useLoad(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled() }));
+  const loaded = useLoad(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled(), now: Date.now() }));
   if (!loaded) return <Screen>{null}</Screen>;
-  const { settings, serviceOn } = loaded;
+  const { settings, serviceOn, now } = loaded;
   const { plan } = settings;
+  const offAt = settings.pending.gateOffAt;
+  const gateOn = settings.gateEnabled && offAt === null;
+
+  const toggleGate = (on: boolean) => {
+    if (on) return setGateWanted(true).then(changed);
+    Alert.alert('Turn off the mindful gate?', 'It stays on for 24 more hours, so the decision is made by your rested self, not a tired one. You can cancel any time before then.', [
+      { text: 'Keep it on', style: 'cancel' },
+      { text: 'Turn off in 24h', style: 'destructive', onPress: () => setGateWanted(false).then(changed) },
+    ]);
+  };
+
+  const gateStatus = !settings.gateEnabled
+    ? 'Off'
+    : offAt !== null
+      ? `Still on, turns off ${timeUntil(offAt, now)}. Switch on to keep it.`
+      : serviceOn
+        ? 'On: wasted apps open after a short pause'
+        : 'Waiting for Accessibility to be turned on';
 
   const setTime = async (key: 'morningAt' | 'nightAt', min: number) => {
     const next = { ...settings, [key]: toHHMM(min) };
@@ -64,13 +84,13 @@ export default function Settings() {
           <View style={{ flex: 1 }}>
             <Txt variant="heading">Mindful gate</Txt>
             <Txt variant="caption" muted>
-              {!settings.gateEnabled ? 'Off' : serviceOn ? 'On: wasted apps open after a short pause' : 'Waiting for Accessibility to be turned on'}
+              {gateStatus}
             </Txt>
           </View>
           <Switch
             accessibilityLabel="Mindful gate"
-            value={settings.gateEnabled}
-            onValueChange={(on) => saveSettings({ gateEnabled: on }).then(changed)}
+            value={gateOn}
+            onValueChange={toggleGate}
             trackColor={{ true: colors.primary, false: colors.track }}
           />
         </Row>
