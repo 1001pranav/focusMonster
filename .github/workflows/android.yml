@@ -10,14 +10,16 @@ concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 
+# Pinned rather than ubuntu-latest, so a runner image change is a reviewed edit here and not a
+# surprise. 26.04 ships the Android SDK and Node 24.
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
@@ -26,19 +28,23 @@ jobs:
 
   apk:
     needs: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+      # The basic provider is open source (MIT) and free for private repos; the default "enhanced"
+      # one is proprietary and only a free preview for them.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
       - run: npm ci
       # android/ is generated (Continuous Native Generation), never committed.
       - run: npx expo prebuild --platform android --no-install
@@ -53,7 +59,7 @@ jobs:
         run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
       - name: Name the APK after the commit
         run: mv android/app/build/outputs/apk/release/app-release.apk "focusmonster-${GITHUB_SHA::7}.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: focusmonster-apk
           path: focusmonster-*.apk
