@@ -3,7 +3,8 @@ import type { Goal, Task } from './tasks';
 
 /** Keys stored by the native gate screen (GateActivity.REASONS). */
 export type GateReason = 'bored' | 'avoiding' | 'tired' | 'lonely' | 'habit' | 'specific';
-export type GateChoice = 'closed' | 'continued' | 'left';
+/** 'instead': closed the app by picking a replacement habit. */
+export type GateChoice = 'closed' | 'continued' | 'left' | 'instead';
 
 export const REASON_LABELS: Record<GateReason, string> = {
   bored: 'Bored',
@@ -20,7 +21,9 @@ export interface GateEvent {
   reason: GateReason | null;
   choice: GateChoice;
   waitSec: number;
-  kind: 'open' | 'break';
+  kind: 'open' | 'break' | 'focus';
+  /** With 'instead': the habit picked. */
+  habitId: string | null;
 }
 
 export interface GateSummary {

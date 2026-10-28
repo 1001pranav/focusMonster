@@ -39,4 +39,12 @@ class GateConfigTest {
     org.junit.Assert.assertEquals(ShortsPolicy.BLOCK, c.shortsPolicy(999).mode)
     org.junit.Assert.assertEquals(ShortsPolicy.COUNT, c.shortsPolicy(1000).mode)
   }
+
+  @Test
+  fun `a focus session runs until its end`() {
+    val c = config.copy(focusUntil = 1000)
+    assertTrue(c.focusActive(999))
+    assertFalse(c.focusActive(1000))
+    assertFalse(config.focusActive(0))
+  }
 }

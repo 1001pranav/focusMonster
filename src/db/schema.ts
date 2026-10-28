@@ -20,4 +20,11 @@ export const MIGRATIONS: string[] = [
   -- 'open' when a wasted app was opened, 'break' for a pause in the middle of Reels/Shorts.
   ALTER TABLE gate_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'open';
   `,
+  `
+  CREATE TABLE focus_sessions (id TEXT PRIMARY KEY NOT NULL, task_id TEXT, goal_id TEXT, started_at INTEGER NOT NULL, planned_end INTEGER NOT NULL, ended_at INTEGER);
+  CREATE TABLE habits (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+  CREATE TABLE habit_logs (habit_id TEXT NOT NULL, day TEXT NOT NULL, PRIMARY KEY (habit_id, day));
+  -- The habit picked from the gate's "Instead" list.
+  ALTER TABLE gate_events ADD COLUMN habit_id TEXT;
+  `,
 ];
