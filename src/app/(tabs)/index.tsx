@@ -27,6 +27,7 @@ export default function Today() {
       )}
       <Progress data={data} />
       <GateCard data={data} />
+      <ShortVideoCard data={data} />
       <WhyCard data={data} />
       <TopThree data={data} />
       <Week data={data} />
@@ -95,6 +96,36 @@ function GateCard({ data }: { data: TodayData }) {
           Most common reason: {REASON_LABELS[top.reason].toLowerCase()} ({top.count}).
         </Txt>
       ) : null}
+    </Card>
+  );
+}
+
+/** The count the user asked for from the start: Reels and Shorts watched today. */
+function ShortVideoCard({ data }: { data: TodayData }) {
+  if (!data.shortVideo.length) return null;
+  return (
+    <Card>
+      <Txt variant="heading">Short videos today</Txt>
+      {data.shortVideo.map((l) => (
+        <View key={l.label} style={{ gap: 2 }}>
+          <Row style={{ justifyContent: 'space-between', minHeight: 0 }}>
+            <Txt>{l.label}</Txt>
+            <Txt variant="label">
+              {l.count} · {formatMinutes(l.minutes)}
+            </Txt>
+          </Row>
+          {l.yesterday !== null ? (
+            <Txt variant="caption" muted>
+              {l.count <= l.yesterday ? `▼ ${l.yesterday - l.count} fewer` : `▲ ${l.count - l.yesterday} more`} than yesterday ({l.yesterday})
+            </Txt>
+          ) : null}
+          {l.blocked > 0 ? (
+            <Txt variant="caption" muted>
+              Blocked {l.blocked} {l.blocked === 1 ? 'time' : 'times'}
+            </Txt>
+          ) : null}
+        </View>
+      ))}
     </Card>
   );
 }

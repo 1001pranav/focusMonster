@@ -30,11 +30,19 @@ All data stays on the phone. There is no account and no backend.
 - Every decision is logged, and Today shows how often the gate paused you, how often you turned back, and your most common reason.
 - It runs as an Accessibility service that only listens for which app is opening. It never reads screen content. Turn it on in Settings → Mindful gate. On Android 13+, a sideloaded APK also needs App info → ⋮ → **Allow restricted settings**.
 
+## Reels and Shorts
+
+- **Counts** Reels and Shorts watched per day, and the minutes spent in the player. Today compares the count with yesterday.
+- **Three modes:** *Just count*, *Pause me* (a break screen every 10, 20 or 30 videos, with a wait of at least 10 s), or *Block* (the player is closed with Back and the rest of the app stays usable).
+- How it works: inside Instagram and YouTube only, the accessibility service looks for the short-video player by its view id (`FocusAccessibilityService.PLAYERS`). Only swipes of the player itself count, and a burst of scroll events from one swipe is one video. Time in the player stops counting a minute after the last swipe.
+- ⚠️ When Instagram or YouTube renames those view ids in an update, detection stops silently. If the counts drop to zero while you're clearly watching, the ids need updating.
+
 ## Commitment lock
 
 Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.
 
 - Turning the mindful gate **off** takes effect 24 hours later. Turning it on, or cancelling, is immediate.
+- A **gentler Reels/Shorts mode** (Block → Pause → Just count, or pausing less often) also waits 24 hours.
 - **Removing** an app from the wasted list takes 24 hours, and the app is still counted and gated until then. Adding one is immediate.
 - The native gate keeps track of these deadlines itself, so they take effect on time even if FocusMonster isn't opened.
 

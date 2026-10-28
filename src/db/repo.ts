@@ -1,6 +1,7 @@
 import type { AppTag } from '@/domain/apps';
 import type { GateEvent } from '@/domain/gate';
 import { NO_PENDING, type Pending } from '@/domain/lock';
+import { DEFAULT_SHORTS, type ShortsPolicy, type ShortVideoDay } from '@/domain/shorts';
 import type { Day } from '@/domain/dates';
 import type { Plan } from '@/domain/target';
 import { newId, type Goal, type Task, type TaskStatus } from '@/domain/tasks';
@@ -18,9 +19,10 @@ export interface Settings {
   gateEnabled: boolean;
   /** Changes that weaken a protection, waiting out the 24-hour lock (src/domain/lock.ts). */
   pending: Pending;
+  shorts: ShortsPolicy;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
@@ -165,16 +167,35 @@ export async function saveGateEvents(events: GateEvent[]): Promise<void> {
   const db = await getDb();
   await db.withExclusiveTransactionAsync(async (tx) => {
     for (const e of events) {
-      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec) VALUES (?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec]);
+      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec, kind) VALUES (?, ?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec, e.kind]);
     }
   });
 }
 
 export async function loadGateEvents(sinceMs: number): Promise<GateEvent[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number }>(
+  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number; kind: GateEvent['kind'] }>(
     'SELECT * FROM gate_events WHERE at >= ? ORDER BY at',
     [sinceMs],
   );
-  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec }));
+  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec, kind: r.kind }));
+}
+
+// Short videos
+
+/** Replaces the given days' rows: the native counter is the source of truth while it still has them. */
+export async function saveShortVideo(rows: ShortVideoDay[]): Promise<void> {
+  if (!rows.length) return;
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    for (const r of rows) {
+      await tx.runAsync('INSERT OR REPLACE INTO short_video (day, package, count, ms, blocked) VALUES (?, ?, ?, ?, ?)', [r.day, r.packageName, r.count, r.ms, r.blocked]);
+    }
+  });
+}
+
+export async function loadShortVideo(fromDay: Day): Promise<ShortVideoDay[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ day: Day; package: string; count: number; ms: number; blocked: number }>('SELECT * FROM short_video WHERE day >= ?', [fromDay]);
+  return rows.map((r) => ({ day: r.day, packageName: r.package, count: r.count, ms: r.ms, blocked: r.blocked }));
 }

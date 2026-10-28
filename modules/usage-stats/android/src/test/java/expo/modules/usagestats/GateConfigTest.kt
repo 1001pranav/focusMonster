@@ -32,4 +32,11 @@ class GateConfigTest {
   fun `nothing is gated while switched off`() {
     assertFalse(config.copy(enabled = false).gates(ig, 0))
   }
+
+  @Test
+  fun `a weaker short-video policy starts when its lock runs out`() {
+    val c = config.copy(shorts = ShortsPolicy(ShortsPolicy.BLOCK, 0), shortsNext = ShortsPolicy(ShortsPolicy.COUNT, 0), shortsNextAt = 1000)
+    org.junit.Assert.assertEquals(ShortsPolicy.BLOCK, c.shortsPolicy(999).mode)
+    org.junit.Assert.assertEquals(ShortsPolicy.COUNT, c.shortsPolicy(1000).mode)
+  }
 }

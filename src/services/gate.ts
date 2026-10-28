@@ -4,6 +4,7 @@ import { gateWhy, nextTask } from '@/domain/gate';
 import { DEFAULT_WASTED, type AppTag } from '@/domain/apps';
 import type { Day } from '@/domain/dates';
 import type { Pending } from '@/domain/lock';
+import type { ShortsPolicy } from '@/domain/shorts';
 import type { Goal, Task } from '@/domain/tasks';
 import { saveGateEvents } from '@/db/repo';
 
@@ -15,6 +16,7 @@ export async function importGateLog(): Promise<void> {
     reason: e.reason as GateReason | null,
     choice: e.choice as GateChoice,
     waitSec: e.waitSec,
+    kind: e.kind === 'break' ? 'break' : 'open',
   }));
   await saveGateEvents(events);
 }
@@ -23,7 +25,7 @@ export async function importGateLog(): Promise<void> {
  * Hands the gate what it shows. It reads this while the app is closed, so the target is today's as
  * of the last time the app was opened; a new day keeps yesterday's until then.
  */
-export function pushGateConfig(input: { enabled: boolean; pending: Pending; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
+export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
   const task = nextTask(input.tasks, input.day);
   configureGate({
     enabled: input.enabled,
@@ -31,6 +33,8 @@ export function pushGateConfig(input: { enabled: boolean; pending: Pending; tags
     offAt: input.pending.gateOffAt ?? 0,
     wasted: wastedPackages(input.tags),
     releaseAt: input.pending.untagAt,
+    shorts: input.shorts,
+    shortsNext: input.pending.shortsNext ?? null,
     targetMin: Math.round(input.targetMin),
     nextTask: task?.title ?? null,
     why: gateWhy(input.goals, task),

@@ -7,6 +7,7 @@ interface FocusGateNative {
   openAppDetails(): void;
   configure(json: string): void;
   drainLog(): string;
+  shortVideoDays(): string;
 }
 
 const native = requireOptionalNativeModule<FocusGateNative>('FocusGate');
@@ -27,6 +28,9 @@ export interface GateConfig {
   wasted: string[];
   /** Wasted apps on their way out, with the epoch ms they stop being gated. */
   releaseAt: Record<string, number>;
+  shorts: { mode: string; limit: number };
+  /** A weaker Reels/Shorts policy and the epoch ms it starts. */
+  shortsNext: { mode: string; limit: number; at: number } | null;
   targetMin: number;
   nextTask: string | null;
   why: string | null;
@@ -40,7 +44,13 @@ export interface RawGateEvent {
   reason: string | null;
   choice: string;
   waitSec: number;
+  /** Missing in entries logged before breaks existed. */
+  kind?: string;
 }
 
 /** Gate decisions since the last call, oldest first. */
 export const drainGateLog = (): RawGateEvent[] => (native ? (JSON.parse(native.drainLog()) as RawGateEvent[]) : []);
+
+/** Reels/Shorts per day and app: {day: {package: {count, ms, blocked}}}, the last two weeks. */
+export const shortVideoDays = (): Record<string, Record<string, { count: number; ms: number; blocked: number }>> =>
+  native ? JSON.parse(native.shortVideoDays()) : {};

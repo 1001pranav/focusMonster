@@ -14,4 +14,10 @@ export const MIGRATIONS: string[] = [
   CREATE TABLE gate_events (at INTEGER NOT NULL, package TEXT NOT NULL, reason TEXT, choice TEXT NOT NULL, wait_sec INTEGER NOT NULL);
   CREATE INDEX gate_events_at ON gate_events (at);
   `,
+  `
+  -- Reels/Shorts per day and app, copied from the native counter (src/services/shorts.ts).
+  CREATE TABLE short_video (day TEXT NOT NULL, package TEXT NOT NULL, count INTEGER NOT NULL, ms INTEGER NOT NULL, blocked INTEGER NOT NULL, PRIMARY KEY (day, package));
+  -- 'open' when a wasted app was opened, 'break' for a pause in the middle of Reels/Shorts.
+  ALTER TABLE gate_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'open';
+  `,
 ];
