@@ -1,4 +1,4 @@
-import { requestBedtime, cancelShorts, requestShorts, cancelGateOff, cancelUntag, LOCK_MS, NO_PENDING, requestGateOff, requestUntag, takeDue, timeUntil } from '../lock';
+import { requestOverlayOff, cancelOverlayOff, requestBedtime, cancelShorts, requestShorts, cancelGateOff, cancelUntag, LOCK_MS, NO_PENDING, requestGateOff, requestUntag, takeDue, timeUntil } from '../lock';
 
 describe('commitment lock', () => {
   it('turns the gate off a day after asking', () => {
@@ -56,5 +56,12 @@ describe('commitment lock', () => {
     const p = requestBedtime(NO_PENDING, later, 0);
     expect(takeDue(p, LOCK_MS - 1).bedtime).toBeNull();
     expect(takeDue(p, LOCK_MS).bedtime).toEqual(later);
+  });
+
+  it('turns the live counter off a day later', () => {
+    const p = requestOverlayOff(NO_PENDING, 0);
+    expect(takeDue(p, LOCK_MS - 1).overlayOff).toBe(false);
+    expect(takeDue(p, LOCK_MS).overlayOff).toBe(true);
+    expect(cancelOverlayOff(p).overlayOffAt).toBeNull();
   });
 });

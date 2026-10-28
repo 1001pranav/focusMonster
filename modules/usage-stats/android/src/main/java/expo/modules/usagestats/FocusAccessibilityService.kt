@@ -1,7 +1,10 @@
 package expo.modules.usagestats
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
@@ -32,6 +35,7 @@ class FocusAccessibilityService : AccessibilityService() {
   }
 
   private var foreground: String? = null
+  private val overlay by lazy { ReelOverlay(this) }
   private var lastWindow: String? = null
   private var playerApp: String? = null
   private var lastCheck = 0L
@@ -107,9 +111,11 @@ class FocusAccessibilityService : AccessibilityService() {
     playerApp = pkg
     Detection.notePlayerSeen(this, pkg, now)
     if (Gate.reels.enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
+    updateOverlay(pkg, now)
   }
 
   private fun leavePlayer(now: Long) {
+    overlay.hide()
     val pkg = playerApp ?: return
     playerApp = null
     ShortVideoStore.add(this, pkg, now, ms = Gate.reels.leave(now))
@@ -124,11 +130,36 @@ class FocusAccessibilityService : AccessibilityService() {
     if (!Gate.reels.inFeed) enterPlayer(pkg, now)
     if (!Gate.reels.inFeed || !Gate.reels.scroll(now)) return
     ShortVideoStore.add(this, pkg, now, count = 1)
+    updateOverlay(pkg, now)
     val policy = GateStore.config(this).shortsPolicy(now)
     if (policy.mode == ShortsPolicy.PAUSE && Gate.reels.breakDue(policy.limit)) {
       Gate.reels.tookBreak()
       openGate(pkg, GateActivity.MODE_BREAK)
     }
+  }
+
+  private fun updateOverlay(pkg: String, now: Long) {
+    val config = GateStore.config(this)
+    if (!config.overlayOn(now)) return overlay.hide()
+    val today = ShortVideoStore.read(this).optJSONObject(ShortVideoStore.dayOf(now))?.optJSONObject(pkg)?.optInt("count") ?: 0
+    val minutes = (now - Gate.reels.sessionStartedAt) / 60000.0
+    runCatching { overlay.show(OverlayText.of(Gate.reels.sessionCount, minutes, today, config.shortsPolicy(now))) }
+  }
+
+  /** Screen off ends a Reels visit: no window event says so, and the pill mustn't sit on the lock screen. */
+  private val screenOff = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) = leavePlayer(System.currentTimeMillis())
+  }
+
+  override fun onServiceConnected() {
+    super.onServiceConnected()
+    registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+  }
+
+  override fun onDestroy() {
+    runCatching { unregisterReceiver(screenOff) }
+    overlay.hide()
+    super.onDestroy()
   }
 
   /** Resource ids from the scrolled view up through its parents, null where a view has none. */

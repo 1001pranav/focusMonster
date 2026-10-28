@@ -41,7 +41,12 @@ data class GateConfig(
   /** A weaker bedtime waiting out the 24-hour lock, and when it starts. */
   val quietNext: QuietHours? = null,
   val quietNextAt: Long = 0,
+  /** The live counter over Reels/Shorts, and when it turns itself off (the 24-hour lock). */
+  val overlay: Boolean = true,
+  val overlayOffAt: Long = 0,
 ) {
+  fun overlayOn(now: Long) = overlay && (overlayOffAt == 0L || now < overlayOffAt)
+
   fun quietHours(now: Long): QuietHours = if (quietNext != null && now >= quietNextAt) quietNext else quiet
 
   fun focusActive(now: Long) = now < focusUntil
@@ -103,6 +108,8 @@ object GateStore {
       quiet = o.optJSONObject("bedtime")?.let(::quiet) ?: QuietHours.OFF,
       quietNext = o.optJSONObject("bedtimeNext")?.let(::quiet),
       quietNextAt = o.optJSONObject("bedtimeNext")?.optLong("at", 0) ?: 0,
+      overlay = o.optBoolean("overlay", true),
+      overlayOffAt = o.optLong("overlayOffAt", 0),
       instead = (o.optJSONArray("instead") ?: JSONArray()).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { h -> h.getString("id") to h.getString("title") } } },
     )
   }

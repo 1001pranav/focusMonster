@@ -41,7 +41,7 @@ export async function importGateLog(): Promise<void> {
  * Hands the gate what it shows. It reads this while the app is closed, so the target is today's as
  * of the last time the app was opened; a new day keeps yesterday's until then.
  */
-export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; focus: FocusSession | null; habits: Habit[]; nextIfHit: number; morningAt: string; nightAt: string; bedtime: Bedtime; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
+export function pushGateConfig(input: { enabled: boolean; pending: Pending; shorts: ShortsPolicy; focus: FocusSession | null; habits: Habit[]; nextIfHit: number; morningAt: string; nightAt: string; bedtime: Bedtime; overlay: boolean; tags: Record<string, AppTag>; targetMin: number; tasks: Task[]; goals: Goal[]; day: Day }) {
   const task = nextTask(input.tasks, input.day);
   configureGate({
     enabled: input.enabled,
@@ -63,6 +63,8 @@ export function pushGateConfig(input: { enabled: boolean; pending: Pending; shor
     nightAt: input.nightAt,
     bedtime: input.bedtime,
     bedtimeNext: input.pending.bedtimeNext ?? null,
+    overlay: input.overlay,
+    overlayOffAt: input.pending.overlayOffAt ?? 0,
     nextTask: task?.title ?? null,
     why: gateWhy(input.goals, task),
   });
