@@ -11,7 +11,19 @@ data class GateConfig(
   val targetMin: Int,
   val nextTask: String?,
   val why: String?,
-)
+  /** Epoch ms when the gate turns itself off (the 24-hour lock ran out); 0 for never. */
+  val offAt: Long = 0,
+  /** Wasted apps on their way out, and when they stop being gated. */
+  val releaseAt: Map<String, Long> = emptyMap(),
+) {
+  /** Whether opening [pkg] at [now] should go through the gate. */
+  fun gates(pkg: String, now: Long): Boolean {
+    if (!enabled || (offAt > 0 && now >= offAt)) return false
+    if (pkg !in wasted) return false
+    val release = releaseAt[pkg]
+    return release == null || now < release
+  }
+}
 
 /**
  * The gate's config and its log of decisions, in SharedPreferences: the accessibility service runs
@@ -39,12 +51,15 @@ object GateStore {
   private fun parse(json: String?): GateConfig {
     val o = json?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return GateConfig(false, emptySet(), 0, null, null)
     val wasted = o.optJSONArray("wasted") ?: JSONArray()
+    val release = o.optJSONObject("releaseAt") ?: JSONObject()
     return GateConfig(
       enabled = o.optBoolean("enabled", false),
       wasted = (0 until wasted.length()).map { wasted.getString(it) }.toSet(),
       targetMin = o.optInt("targetMin", 0),
       nextTask = o.optString("nextTask").takeIf { it.isNotEmpty() },
       why = o.optString("why").takeIf { it.isNotEmpty() },
+      offAt = o.optLong("offAt", 0),
+      releaseAt = release.keys().asSequence().associateWith { release.getLong(it) },
     )
   }
 

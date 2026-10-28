@@ -1,5 +1,6 @@
 import type { AppTag } from '@/domain/apps';
 import type { GateEvent } from '@/domain/gate';
+import { NO_PENDING, type Pending } from '@/domain/lock';
 import type { Day } from '@/domain/dates';
 import type { Plan } from '@/domain/target';
 import { newId, type Goal, type Task, type TaskStatus } from '@/domain/tasks';
@@ -15,9 +16,11 @@ export interface Settings {
   nightAt: string;
   /** The user wants the mindful gate; it only runs once the accessibility service is on too. */
   gateEnabled: boolean;
+  /** Changes that weaken a protection, waiting out the 24-hour lock (src/domain/lock.ts). */
+  pending: Pending;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
@@ -48,6 +51,14 @@ export async function loadAppLabels(): Promise<Record<string, string>> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ package: string; label: string }>('SELECT package, label FROM app_tags');
   return Object.fromEntries(rows.map((r) => [r.package, r.label]));
+}
+
+/** Changes the tag of apps already listed. */
+export async function setTags(tags: Record<string, AppTag>): Promise<void> {
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    for (const [pkg, tag] of Object.entries(tags)) await tx.runAsync('UPDATE app_tags SET tag = ? WHERE package = ?', [tag, pkg]);
+  });
 }
 
 export async function saveTags(tags: { packageName: string; label: string; tag: AppTag }[]): Promise<void> {
