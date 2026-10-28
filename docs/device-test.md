@@ -55,7 +55,7 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 
 | # | Do | Expect |
 |---|---|---|
-| 5.1 | Instagram → Reels, swipe through 5 reels, leave | Today: "Reels 5 · Xm". **If it says 0 or the card is missing, Instagram's view ids have changed. Tell me your Instagram version (App info).** |
+| 5.1 | Instagram → Reels, swipe through 5 reels, leave | Today: "Reels 5 · Xm". **If it's 0:** Today → *Check detection*. If it says the player was never recognised, tap *Send report* and send it to me with your Instagram version (App info): the report has the player's real name |
 | 5.2 | Scroll comments inside a reel | The count doesn't go up |
 | 5.3 | YouTube → Shorts, swipe 5 | "Shorts 5" (same note: YouTube version if it's 0) |
 | 5.4 | Settings → Reels and Shorts → *Pause me* every 10, then watch 10 reels | "10 reels in a row" break screen, at least 10 s wait |

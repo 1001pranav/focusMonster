@@ -8,6 +8,7 @@ interface FocusGateNative {
   configure(json: string): void;
   drainLog(): string;
   shortVideoDays(): string;
+  detectionInfo(): string;
   scheduleBackground(): void;
 }
 
@@ -73,3 +74,15 @@ export const shortVideoDays = (): Record<string, Record<string, { count: number;
 
 /** Starts the background worker (budget warnings, morning plan, nightly recap). Safe to call often. */
 export const scheduleBackground = () => native?.scheduleBackground();
+
+export interface DetectionApp {
+  opened?: number;
+  lastOpened?: number;
+  playerSeen?: number;
+  lastPlayerSeen?: number;
+  /** Recent scrolls as view-id chains, scrolled view first: "(no id) < clips_viewer_view_pager". */
+  scrolls?: string[];
+}
+
+/** What Reels/Shorts detection saw today, for the detection check screen. */
+export const detectionInfo = (): { day?: string; apps?: Record<string, DetectionApp> } => (native ? JSON.parse(native.detectionInfo()) : {});

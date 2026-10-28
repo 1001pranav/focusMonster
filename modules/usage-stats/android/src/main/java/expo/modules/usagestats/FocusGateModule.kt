@@ -47,6 +47,8 @@ class FocusGateModule : Module() {
     /** Starts the background worker once; later calls keep the running schedule. */
     Function("scheduleBackground") { BudgetWorker.schedule(context) }
 
+    Function("detectionInfo") { Detection.read(context) }
+
     Function("shortVideoDays") { ShortVideoStore.read(context).toString() }
   }
 }

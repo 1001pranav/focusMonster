@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
@@ -110,7 +111,20 @@ function GateCard({ data }: { data: TodayData }) {
 
 /** The count the user asked for from the start: Reels and Shorts watched today. */
 function ShortVideoCard({ data }: { data: TodayData }) {
-  if (!data.shortVideo.length) return null;
+  // Never hidden: an empty card has to say why, or a broken counter looks like a good day.
+  if (!data.shortVideo.length) {
+    return (
+      <Card>
+        <Txt variant="heading">Short videos today</Txt>
+        <Txt muted>
+          {data.gate.serviceOn
+            ? 'No Reels or Shorts counted yet today. Watched some? Check the detection.'
+            : "Not counting: Reels and Shorts are counted by the Accessibility service, which is off. Turn it on in Settings → Mindful gate."}
+        </Txt>
+        {data.gate.serviceOn ? <Button title="Check detection" kind="plain" onPress={() => router.push('/detection')} /> : null}
+      </Card>
+    );
+  }
   return (
     <Card>
       <Txt variant="heading">Short videos today</Txt>
@@ -134,6 +148,7 @@ function ShortVideoCard({ data }: { data: TodayData }) {
           ) : null}
         </View>
       ))}
+      <Button title="Check detection" kind="plain" onPress={() => router.push('/detection')} />
     </Card>
   );
 }

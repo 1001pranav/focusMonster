@@ -69,6 +69,7 @@ class FocusAccessibilityService : AccessibilityService() {
     // Keyboards and the notification shade come and go on top; they don't close the player.
     if (pkg == "com.android.systemui" || pkg.contains("inputmethod") || pkg.contains("keyboard")) return
     foreground = pkg
+    if (pkg in PLAYERS) Detection.noteOpened(this, pkg, now)
     if (pkg !in PLAYERS) leavePlayer(now)
     // Scroll and content events only while a short-video app is open: elsewhere they are pure cost.
     setEvents(if (pkg in PLAYERS) PLAYER_EVENTS else BASE_EVENTS)
@@ -104,6 +105,7 @@ class FocusAccessibilityService : AccessibilityService() {
       return
     }
     playerApp = pkg
+    Detection.notePlayerSeen(this, pkg, now)
     if (Gate.reels.enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
   }
 
@@ -115,9 +117,10 @@ class FocusAccessibilityService : AccessibilityService() {
 
   private fun onScroll(pkg: String, event: AccessibilityEvent, now: Long) {
     if (GateStore.config(this).focusActive(now)) return
+    val chain = idChain(event.source)
+    Detection.noteScroll(this, pkg, chain)
     // Only swipes of the player itself: scrolling comments or the feed isn't a new video.
-    val id = event.source?.viewIdResourceName?.substringAfter(":id/") ?: return
-    if (id !in PLAYERS.getValue(pkg)) return
+    if (!PlayerMatch.inPlayer(chain, PLAYERS.getValue(pkg))) return
     if (!Gate.reels.inFeed) enterPlayer(pkg, now)
     if (!Gate.reels.inFeed || !Gate.reels.scroll(now)) return
     ShortVideoStore.add(this, pkg, now, count = 1)
@@ -126,6 +129,17 @@ class FocusAccessibilityService : AccessibilityService() {
       Gate.reels.tookBreak()
       openGate(pkg, GateActivity.MODE_BREAK)
     }
+  }
+
+  /** Resource ids from the scrolled view up through its parents, null where a view has none. */
+  private fun idChain(source: AccessibilityNodeInfo?): List<String?> {
+    val out = ArrayList<String?>()
+    var node = source
+    while (node != null && out.size < PlayerMatch.MAX_DEPTH) {
+      out.add(node.viewIdResourceName)
+      node = node.parent
+    }
+    return out
   }
 
   private fun openGate(pkg: String, mode: String) {
