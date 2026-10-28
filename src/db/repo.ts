@@ -1,5 +1,6 @@
 import type { AppTag } from '@/domain/apps';
 import { DEFAULT_BEDTIME, type Bedtime } from '@/domain/bedtime';
+import type { Challenge } from '@/domain/challenges';
 import type { FocusSession } from '@/domain/focus';
 import type { GateEvent } from '@/domain/gate';
 import type { Reflection } from '@/domain/review';
@@ -274,4 +275,38 @@ export async function saveReflection(day: Day, text: string): Promise<void> {
 export async function loadReflections(fromDay: Day): Promise<Reflection[]> {
   const db = await getDb();
   return db.getAllAsync<Reflection>('SELECT day, text FROM reflections WHERE day >= ? ORDER BY day', [fromDay]);
+}
+
+// Challenges
+
+/** The most recent challenge, finished or not. */
+export async function loadLatestChallenge(): Promise<Challenge | null> {
+  const db = await getDb();
+  const r = await db.getFirstAsync<{ id: string; type: string; start_day: Day; ended: number }>('SELECT * FROM challenges ORDER BY created_at DESC LIMIT 1');
+  return r ? { id: r.id, type: r.type, startDay: r.start_day, ended: r.ended === 1 } : null;
+}
+
+/** Starts a challenge; the previous one, if still open, ends. */
+export async function startChallengeRow(type: string, startDay: Day): Promise<void> {
+  const db = await getDb();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync('UPDATE challenges SET ended = 1 WHERE ended = 0');
+    await tx.runAsync('INSERT INTO challenges (id, type, start_day, created_at) VALUES (?, ?, ?, ?)', [newId(), type, startDay, Date.now()]);
+  });
+}
+
+export async function endChallenge(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE challenges SET ended = 1 WHERE id = ?', [id]);
+}
+
+export async function loadChallengeDays(id: string): Promise<Record<Day, boolean>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ day: Day; passed: number }>('SELECT day, passed FROM challenge_days WHERE challenge_id = ?', [id]);
+  return Object.fromEntries(rows.map((r) => [r.day, r.passed === 1]));
+}
+
+export async function saveChallengeDay(id: string, day: Day, passed: boolean): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT OR REPLACE INTO challenge_days (challenge_id, day, passed) VALUES (?, ?, ?)', [id, day, passed ? 1 : 0]);
 }

@@ -65,6 +65,20 @@ The JS side sends today's target together with what tomorrow's would be after a 
 - **Share card:** an image with totals only (average per day, change, days on target, short videos, focus minutes), shared through the system share sheet. No app names or reflections.
 - **Nightly reflection:** after 18:00, Today asks "What did you do with the time you won back?" One line is enough.
 
+## Challenges
+
+One at a time, each measured from the phone's usage data rather than ticked off by hand:
+
+| Challenge | Passes when |
+|---|---|
+| No phone the first hour after waking | under 5 min of any app in the hour after wake-up (bedtime's end, or 07:00), 6 of 7 days |
+| Phone-free dinner | under 5 min of any app from 19:30 to 20:30, 6 of 7 days |
+| No wasted apps after 22:00 | under 5 min in wasted apps until midnight, 6 of 7 days |
+| Zero Reels and Shorts weekend | no short videos on Saturday or Sunday |
+| On target 5 days of 7 | the daily target is hit on 5 of the 7 days |
+
+A day is judged once its window has closed. Days Android no longer has data for (after about a week), or days without usage access, stay unjudged rather than counting as a pass.
+
 ## Commitment lock
 
 Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.

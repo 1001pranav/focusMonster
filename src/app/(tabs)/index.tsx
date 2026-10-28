@@ -10,6 +10,7 @@ import { changed } from '@/db/store';
 import { useToday, type TodayData } from '@/data/hooks';
 import { setGateWanted } from '@/services/lock';
 import { Button, Card, Chip, Field, Ring, Row, Screen, Txt } from '@/ui/components';
+import { ChallengeCard } from '@/ui/ChallengeCard';
 import { FocusCard } from '@/ui/FocusCard';
 import { GateSetup } from '@/ui/GateSetup';
 import { HabitsCard } from '@/ui/HabitsCard';
@@ -35,6 +36,7 @@ export default function Today() {
       <TopThree data={data} />
       <FocusCard data={data} />
       <HabitsCard data={data} />
+      <ChallengeCard data={data} />
       <Week data={data} />
       <ReflectionCard data={data} />
       <Apps data={data} />

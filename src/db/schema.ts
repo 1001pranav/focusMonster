@@ -31,4 +31,9 @@ export const MIGRATIONS: string[] = [
   -- The nightly one-liner: what the reclaimed time went to.
   CREATE TABLE reflections (day TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL);
   `,
+  `
+  CREATE TABLE challenges (id TEXT PRIMARY KEY NOT NULL, type TEXT NOT NULL, start_day TEXT NOT NULL, ended INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+  -- One row per measured day; days not measured yet have no row.
+  CREATE TABLE challenge_days (challenge_id TEXT NOT NULL, day TEXT NOT NULL, passed INTEGER NOT NULL, PRIMARY KEY (challenge_id, day));
+  `,
 ];
