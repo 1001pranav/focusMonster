@@ -14,7 +14,7 @@ import android.widget.Toast
 /** Shared by the service and the gate screen: both run in the app's one process. */
 object Gate {
   val rules = GateRules()
-  val reels = ReelTracker()
+  val reels = ReelTrackers()
 }
 
 /**
@@ -89,7 +89,9 @@ class FocusAccessibilityService : AccessibilityService() {
 
     if (pkg != foreground) {
       foreground = pkg
-      if (pkg in PLAYERS) Detection.noteOpened(this, pkg, now) else leavePlayer(now)
+      // Any switch ends the other app's Reels/Shorts session, including Instagram to YouTube.
+      if (playerApp != null && playerApp != pkg) leavePlayer(now)
+      if (pkg in PLAYERS) Detection.noteOpened(this, pkg, now)
     }
     // Scroll and content events only while a short-video app is open: elsewhere they are pure cost.
     setEvents(if (pkg in PLAYERS) PLAYER_EVENTS else BASE_EVENTS)
@@ -143,8 +145,9 @@ class FocusAccessibilityService : AccessibilityService() {
   private fun checkPlayer(pkg: String, now: Long) {
     lastCheck = now
     val open = playerVisible(pkg)
-    if (open && !Gate.reels.inFeed) enterPlayer(pkg, now)
-    else if (!open && Gate.reels.inFeed) leavePlayer(now)
+    val reels = Gate.reels.of(pkg)
+    if (open && !reels.inFeed) enterPlayer(pkg, now)
+    else if (!open && reels.inFeed) leavePlayer(now)
   }
 
   private fun playerVisible(pkg: String): Boolean {
@@ -161,9 +164,10 @@ class FocusAccessibilityService : AccessibilityService() {
       Toast.makeText(this, if (pkg.contains("youtube")) "Shorts are blocked. The rest of YouTube is yours." else "Reels are blocked. The rest of Instagram is yours.", Toast.LENGTH_SHORT).show()
       return
     }
+    if (playerApp != null && playerApp != pkg) leavePlayer(now)
     playerApp = pkg
     Detection.notePlayerSeen(this, pkg, now)
-    if (Gate.reels.enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
+    if (Gate.reels.of(pkg).enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
     updateOverlay(pkg, now)
   }
 
@@ -171,7 +175,7 @@ class FocusAccessibilityService : AccessibilityService() {
     overlay.hide()
     val pkg = playerApp ?: return
     playerApp = null
-    ShortVideoStore.add(this, pkg, now, ms = Gate.reels.leave(now))
+    ShortVideoStore.add(this, pkg, now, ms = Gate.reels.of(pkg).leave(now))
   }
 
   private fun onScroll(pkg: String, event: AccessibilityEvent, now: Long) {
@@ -180,13 +184,14 @@ class FocusAccessibilityService : AccessibilityService() {
     Detection.noteScroll(this, pkg, chain)
     // Only swipes of the player itself: scrolling comments or the feed isn't a new video.
     if (!PlayerMatch.inPlayer(chain, PLAYERS.getValue(pkg))) return
-    if (!Gate.reels.inFeed) enterPlayer(pkg, now)
-    if (!Gate.reels.inFeed || !Gate.reels.scroll(now)) return
+    val reels = Gate.reels.of(pkg)
+    if (!reels.inFeed) enterPlayer(pkg, now)
+    if (!reels.inFeed || !reels.scroll(now)) return
     ShortVideoStore.add(this, pkg, now, count = 1)
     updateOverlay(pkg, now)
     val policy = GateStore.config(this).shortsPolicy(now)
-    if (policy.mode == ShortsPolicy.PAUSE && Gate.reels.breakDue(policy.limit)) {
-      Gate.reels.tookBreak()
+    if (policy.mode == ShortsPolicy.PAUSE && reels.breakDue(policy.limit)) {
+      reels.tookBreak()
       openGate(pkg, GateActivity.MODE_BREAK)
     }
   }
@@ -195,8 +200,9 @@ class FocusAccessibilityService : AccessibilityService() {
     val config = GateStore.config(this)
     if (!config.overlayOn(now)) return overlay.hide()
     val today = ShortVideoStore.read(this).optJSONObject(ShortVideoStore.dayOf(now))?.optJSONObject(pkg)?.optInt("count") ?: 0
-    val minutes = (now - Gate.reels.sessionStartedAt) / 60000.0
-    runCatching { overlay.show(OverlayText.of(Gate.reels.sessionCount, minutes, today, config.shortsPolicy(now))) }
+    val reels = Gate.reels.of(pkg)
+    val minutes = (now - reels.sessionStartedAt) / 60000.0
+    runCatching { overlay.show(if (pkg.contains("youtube")) "Shorts" else "Reels", OverlayText.of(reels.sessionCount, minutes, today, config.shortsPolicy(now))) }
   }
 
   /** Screen off ends a Reels visit: no window event says so, and the pill mustn't sit on the lock screen. */
@@ -237,8 +243,8 @@ class FocusAccessibilityService : AccessibilityService() {
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         .putExtra(GateActivity.EXTRA_PACKAGE, pkg)
         .putExtra(GateActivity.EXTRA_MODE, mode)
-        .putExtra(GateActivity.EXTRA_REELS, Gate.reels.sessionCount)
-        .putExtra(GateActivity.EXTRA_SINCE, Gate.reels.sessionStartedAt),
+        .putExtra(GateActivity.EXTRA_REELS, Gate.reels.of(pkg).sessionCount)
+        .putExtra(GateActivity.EXTRA_SINCE, Gate.reels.of(pkg).sessionStartedAt),
     )
   }
 }

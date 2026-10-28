@@ -17,9 +17,10 @@ class ReelOverlay(private val service: AccessibilityService) {
   private val windows = service.getSystemService(WindowManager::class.java)
   private var view: TextView? = null
 
-  fun show(pill: OverlayText.Pill) {
+  /** [feed]: "Reels" or "Shorts", so the count is never mistaken for the other app's. */
+  fun show(feed: String, pill: OverlayText.Pill) {
     val label = view ?: create().also { view = it }
-    label.text = "🎬 ${pill.text}"
+    label.text = "🎬 $feed ${pill.text}"
     (label.background as GradientDrawable).setColor(if (pill.warn) 0xE6C2410C.toInt() else 0xB3121110.toInt())
   }
 
