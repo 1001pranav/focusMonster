@@ -2,18 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Alert, Switch, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
-import { gateServiceEnabled } from '../../../modules/usage-stats/gate';
-import { formatMinutes } from '@/domain/dates';
+import { gateServiceEnabled, openAccessibilitySettings } from '../../../modules/usage-stats/gate';
+import { formatMinutes, startOf } from '@/domain/dates';
 import { timeUntil } from '@/domain/lock';
 import { LIMIT_CHOICES, type ShortsPolicy } from '@/domain/shorts';
 import { hhmmOf, minuteOf, MORNING_FREE_CHOICES, opensAt, type Bedtime } from '@/domain/bedtime';
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
-import { useLoad } from '@/data/hooks';
+import { useLoadResult } from '@/data/hooks';
 import { setBedtime, setGateWanted, setOverlayWanted } from '@/services/lock';
 import { setShortsPolicy } from '@/services/shorts';
 import { ensurePermission } from '@/services/notifications';
-import { Card, Chip, Row, Screen, Stepper, Txt } from '@/ui/components';
+import { pauseForBanking, PAUSE_MIN } from '@/services/gate';
+import { Card, Chip, ErrorState, LoadingState, Row, Screen, Section, Stepper, Txt } from '@/ui/components';
 import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
 
@@ -26,9 +27,9 @@ const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')
 
 export default function Settings() {
   const { colors } = useTheme();
-  const loaded = useLoad(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled(), now: Date.now() }));
-  if (!loaded) return <Screen>{null}</Screen>;
-  const { settings, serviceOn, now } = loaded;
+  const { value: loaded, error, reload } = useLoadResult(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled(), usageAccess: hasUsageAccess(), now: Date.now() }));
+  if (!loaded) return error ? <ErrorState error={error} onRetry={reload} /> : <LoadingState />;
+  const { settings, serviceOn, usageAccess, now } = loaded;
   const { plan } = settings;
   const offAt = settings.pending.gateOffAt;
   const gateOn = settings.gateEnabled && offAt === null;
@@ -41,47 +42,48 @@ export default function Settings() {
     ]);
   };
 
+  const pause = () =>
+    Alert.alert(
+      `Pause for ${PAUSE_MIN} minutes?`,
+      "Some banking and UPI apps won't open while any accessibility service is on. This turns FocusMonster's off: the gate, focus blocking and the Reels counter stop until you turn it back on in Accessibility. You'll get a reminder.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pause',
+          onPress: () =>
+            pauseForBanking().then((ok) => {
+              if (!ok) Alert.alert('Nothing to pause', "The Accessibility service isn't on right now.");
+              changed();
+            }),
+        },
+      ],
+    );
+
   const gateStatus = !settings.gateEnabled
     ? 'Off'
     : offAt !== null
       ? `Still on, turns off ${timeUntil(offAt, now)}. Switch on to keep it.`
       : serviceOn
         ? 'On: wasted apps open after a short pause'
-        : 'Waiting for Accessibility to be turned on';
+        : 'Waiting for the Accessibility service';
 
   const setTime = async (key: 'morningAt' | 'nightAt', min: number) => {
-    const next = { ...settings, [key]: toHHMM(min) };
-    await saveSettings({ [key]: next[key] });
+    await saveSettings({ [key]: toHHMM(min) });
     await ensurePermission();
     changed();
   };
 
+  const status = (on: boolean) => (
+    <Txt variant="label" style={{ color: on ? colors.good : colors.over }}>
+      {on ? 'On' : 'Off'}
+    </Txt>
+  );
+
   return (
     <Screen>
       <Txt variant="title">Settings</Txt>
-      {plan && (
-        <Card>
-          <Txt variant="heading">Your plan</Txt>
-          <Txt muted>
-            Started {plan.startDay} at {formatMinutes(plan.baselineMin)} a day. Target stops at {formatMinutes(plan.floorMin)}.
-          </Txt>
-          <Txt variant="caption" muted>
-            The baseline is fixed on purpose: lowering it later would erase the progress it measures.
-          </Txt>
-        </Card>
-      )}
-      <Card>
-        <Row onPress={() => router.push('/apps')} style={{ justifyContent: 'space-between' }}>
-          <Txt>Wasted-time apps</Txt>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Row>
-        <Row onPress={openUsageAccessSettings} style={{ justifyContent: 'space-between' }}>
-          <Txt>Usage access</Txt>
-          <Txt variant="label" style={{ color: hasUsageAccess() ? colors.good : colors.over }}>
-            {hasUsageAccess() ? 'On' : 'Off'}
-          </Txt>
-        </Row>
-      </Card>
+
+      <Section title="Protection" />
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
@@ -90,22 +92,68 @@ export default function Settings() {
               {gateStatus}
             </Txt>
           </View>
-          <Switch
-            accessibilityLabel="Mindful gate"
-            value={gateOn}
-            onValueChange={toggleGate}
-            trackColor={{ true: colors.primary, false: colors.track }}
-          />
+          <Switch accessibilityLabel="Mindful gate" value={gateOn} onValueChange={toggleGate} trackColor={{ true: colors.primary, false: colors.track }} />
+        </Row>
+        <Txt variant="caption" muted>
+          It only watches the apps you marked as wasted time, plus Instagram and YouTube for counting. Banking, UPI and every other app are never watched.
+        </Txt>
+        {serviceOn ? (
+          <Row onPress={pause} style={{ justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Txt>Banking app won't open?</Txt>
+              <Txt variant="caption" muted>
+                Pause for {PAUSE_MIN} minutes
+              </Txt>
+            </View>
+            <Ionicons name="pause-circle-outline" size={24} color={colors.primary} />
+          </Row>
+        ) : null}
+      </Card>
+      {!serviceOn ? <GateSetup /> : null}
+      <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} now={now} overlay={settings.shortsOverlay} overlayOffAt={settings.pending.overlayOffAt ?? null} />
+      <BedtimeSettings bedtime={settings.bedtime} next={settings.pending.bedtimeNext ?? null} now={now} />
+
+      <Section title="Your plan" />
+      <Card>
+        {plan ? (
+          <>
+            <Txt>
+              Started {startOf(plan.startDay).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} at {formatMinutes(plan.baselineMin)} a day. The target stops dropping at {formatMinutes(plan.floorMin)}.
+            </Txt>
+            <Txt variant="caption" muted>
+              The baseline is fixed on purpose: lowering it later would erase the progress it measures.
+            </Txt>
+          </>
+        ) : null}
+        <Row onPress={() => router.push('/apps')} style={{ justifyContent: 'space-between' }}>
+          <Txt>Wasted-time apps</Txt>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </Row>
       </Card>
-      <BedtimeSettings bedtime={settings.bedtime} next={settings.pending.bedtimeNext ?? null} now={now} />
-      <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} serviceOn={serviceOn} now={now} overlay={settings.shortsOverlay} overlayOffAt={settings.pending.overlayOffAt ?? null} />
+
+      <Section title="Notifications" />
       <Card>
-        <Txt variant="heading">Morning plan</Txt>
+        <Txt variant="label">Morning plan</Txt>
         <Stepper value={toMinutes(settings.morningAt)} onChange={(v) => setTime('morningAt', v)} step={30} min={4 * 60} max={12 * 60} format={toHHMM} />
         <View style={{ height: space.sm }} />
-        <Txt variant="heading">Nightly recap</Txt>
+        <Txt variant="label">Nightly recap</Txt>
         <Stepper value={toMinutes(settings.nightAt)} onChange={(v) => setTime('nightAt', v)} step={30} min={17 * 60} max={23 * 60 + 30} format={toHHMM} />
+      </Card>
+
+      <Section title="Permissions and help" />
+      <Card>
+        <Row onPress={openUsageAccessSettings} style={{ justifyContent: 'space-between' }}>
+          <Txt>Usage access</Txt>
+          {status(usageAccess)}
+        </Row>
+        <Row onPress={openAccessibilitySettings} style={{ justifyContent: 'space-between' }}>
+          <Txt>Accessibility service</Txt>
+          {status(serviceOn)}
+        </Row>
+        <Row onPress={() => router.push('/detection')} style={{ justifyContent: 'space-between' }}>
+          <Txt>Reels and Shorts detection check</Txt>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Row>
       </Card>
     </Screen>
   );
@@ -118,7 +166,7 @@ const MODES: { mode: ShortsPolicy['mode']; label: string }[] = [
 ];
 
 /** Reels/Shorts policy. Stricter choices apply at once; gentler ones wait 24 hours. */
-function ShortsSettings({ policy, next, serviceOn, now, overlay, overlayOffAt }: { policy: ShortsPolicy; next: (ShortsPolicy & { at: number }) | null; serviceOn: boolean; now: number; overlay: boolean; overlayOffAt: number | null }) {
+function ShortsSettings({ policy, next, now, overlay, overlayOffAt }: { policy: ShortsPolicy; next: (ShortsPolicy & { at: number }) | null; now: number; overlay: boolean; overlayOffAt: number | null }) {
   const { colors } = useTheme();
   const shown = next ?? policy;
   const choose = (p: ShortsPolicy) => setShortsPolicy(p).then(changed);
@@ -169,7 +217,6 @@ function ShortsSettings({ policy, next, serviceOn, now, overlay, overlayOffAt }:
           </Txt>
         ) : null}
       </Card>
-      {!serviceOn ? <GateSetup /> : null}
     </>
   );
 }

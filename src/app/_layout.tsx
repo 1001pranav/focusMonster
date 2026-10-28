@@ -3,25 +3,34 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useLoad } from '@/data/hooks';
+import { useLoadResult } from '@/data/hooks';
 import { loadSettings } from '@/db/repo';
 import { configureNotifications } from '@/services/notifications';
+import { ErrorState } from '@/ui/components';
 import { useTheme } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const { colors, dark } = useTheme();
-  const settings = useLoad(loadSettings);
+  const { value: settings, error, reload } = useLoadResult(loadSettings);
 
   useEffect(() => {
     configureNotifications().catch((e) => console.warn(e));
   }, []);
+  // The splash stays up until settings load; if they can't, it must still go, or the app looks frozen.
   useEffect(() => {
-    if (settings) SplashScreen.hideAsync().catch(() => {});
-  }, [settings]);
+    if (settings || error) SplashScreen.hideAsync().catch(() => {});
+  }, [settings, error]);
 
-  if (!settings) return null;
+  if (!settings) {
+    if (!error) return null;
+    return (
+      <SafeAreaProvider>
+        <ErrorState error={error} onRetry={reload} />
+      </SafeAreaProvider>
+    );
+  }
   return (
     <SafeAreaProvider>
       <StatusBar style={dark ? 'light' : 'dark'} />

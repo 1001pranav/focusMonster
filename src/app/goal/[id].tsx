@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { archiveGoal, loadGoals, saveGoal } from '@/db/repo';
 import { changed } from '@/db/store';
-import { Button, Field, Screen, Txt } from '@/ui/components';
+import { BackBar, Button, Field, Screen, Txt } from '@/ui/components';
 
 export default function EditGoal() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,6 +44,7 @@ export default function EditGoal() {
 
   return (
     <Screen>
+      <BackBar title="Goals" />
       <Txt variant="title">{isNew ? 'New goal' : 'Edit goal'}</Txt>
       <Field placeholder="Goal" value={title} onChangeText={setTitle} maxLength={60} autoFocus={isNew} />
       <Field placeholder="Why it matters to you" value={why} onChangeText={setWhy} multiline maxLength={280} />

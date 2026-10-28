@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { space, useTheme } from './theme';
@@ -35,9 +36,99 @@ export function Screen({ children, scroll = true }: { children: ReactNode; scrol
 }
 
 export function Card({ children, style, tone }: { children: ReactNode; style?: ViewStyle; tone?: 'good' | 'over' | 'primary' }) {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const backgroundColor = tone === 'good' ? colors.goodSoft : tone === 'over' ? colors.overSoft : tone === 'primary' ? colors.primarySoft : colors.surface;
-  return <View style={[{ backgroundColor, borderRadius: 16, padding: space.lg, gap: space.sm, borderWidth: 1, borderColor: colors.border }, style]}>{children}</View>;
+  return (
+    <View
+      style={[
+        { backgroundColor, borderRadius: 20, padding: space.lg, gap: space.sm },
+        // Depth instead of outlines in light mode; outlines in dark, where shadows don't show.
+        dark ? { borderWidth: 1, borderColor: colors.border } : { shadowColor: '#1C1A17', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+/** A section title above a group of cards, with an optional action on the right. */
+export function Section({ title, action, onAction, meta }: { title: string; action?: string; onAction?: () => void; meta?: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: space.sm, paddingHorizontal: space.xs }}>
+      <Txt variant="label" style={{ color: colors.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', fontSize: 12 }}>
+        {title}
+      </Txt>
+      {action && onAction ? (
+        <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}>
+          <Txt variant="label" style={{ color: colors.primary }}>
+            {action}
+          </Txt>
+        </Pressable>
+      ) : meta ? (
+        <Txt variant="label" muted>
+          {meta}
+        </Txt>
+      ) : null}
+    </View>
+  );
+}
+
+/** A compact figure with an icon: streak, freezes, time won back. */
+export function StatChip({ icon, value, label }: { icon: IconName; value: string; label: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: space.sm, borderRadius: 14, backgroundColor: colors.surfaceAlt }}>
+      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Txt variant="heading">{value}</Txt>
+      <Txt variant="caption" muted>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
+/** Shown while a screen's first load runs: never a blank page. */
+export function LoadingState({ label = 'Loading…' }: { label?: string }) {
+  const { colors } = useTheme();
+  return (
+    <Screen scroll={false}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Txt muted>{label}</Txt>
+      </View>
+    </Screen>
+  );
+}
+
+/** A load that failed, with the reason and a way to try again. */
+export function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Screen scroll={false}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, paddingHorizontal: space.lg }}>
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+        <Txt variant="heading" style={{ textAlign: 'center' }}>
+          Couldn't load this screen
+        </Txt>
+        <Txt muted style={{ textAlign: 'center' }}>
+          {error.message}
+        </Txt>
+        <Button title="Try again" icon="refresh" onPress={onRetry} />
+      </View>
+    </Screen>
+  );
+}
+
+/** A thin bar for "how much of": per-app time, progress to a goal. */
+export function Bar({ fraction, color }: { fraction: number; color?: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.track, overflow: 'hidden' }}>
+      <View style={{ height: 6, borderRadius: 3, width: `${Math.min(100, Math.max(0, fraction * 100))}%`, backgroundColor: color ?? colors.primary }} />
+    </View>
+  );
 }
 
 export function Button({ title, onPress, kind = 'primary', disabled, icon }: { title: string; onPress: () => void; kind?: 'primary' | 'secondary' | 'plain'; disabled?: boolean; icon?: IconName }) {
@@ -133,6 +224,25 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
     >
       <Txt variant="label" style={{ color: selected ? colors.primaryText : colors.text }}>
         {label}
+      </Txt>
+    </Pressable>
+  );
+}
+
+/** For screens pushed on top of the tabs: the way back, since their header is hidden. */
+export function BackBar({ title }: { title?: string }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      hitSlop={12}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.xs, alignSelf: 'flex-start', opacity: pressed ? 0.6 : 1, marginLeft: -space.xs })}
+    >
+      <Ionicons name="chevron-back" size={24} color={colors.primary} />
+      <Txt variant="label" style={{ color: colors.primary, fontSize: 15 }}>
+        {title ?? 'Back'}
       </Txt>
     </Pressable>
   );

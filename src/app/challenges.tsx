@@ -3,7 +3,7 @@ import { CHALLENGES } from '@/domain/challenges';
 import { today } from '@/domain/dates';
 import { changed } from '@/db/store';
 import { startChallenge } from '@/services/challenges';
-import { Button, Card, Screen, Txt } from '@/ui/components';
+import { BackBar, Button, Card, Screen, Txt } from '@/ui/components';
 
 export default function Challenges() {
   const start = async (type: string) => {
@@ -13,6 +13,7 @@ export default function Challenges() {
   };
   return (
     <Screen>
+      <BackBar />
       <Txt variant="title">Challenges</Txt>
       <Txt muted>One at a time. Each is checked against your phone's own usage data, so it can't be fudged. Starting one ends the current one.</Txt>
       {CHALLENGES.map((c) => (

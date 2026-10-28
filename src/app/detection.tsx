@@ -2,7 +2,7 @@ import { Share, View } from 'react-native';
 import { detectionInfo, gateServiceEnabled, type DetectionApp } from '../../modules/usage-stats/gate';
 import { SHORT_VIDEO_APPS } from '@/domain/shorts';
 import { useLoad } from '@/data/hooks';
-import { Button, Card, Screen, Txt } from '@/ui/components';
+import { BackBar, Button, Card, Screen, Txt, LoadingState } from '@/ui/components';
 import { space, useTheme } from '@/ui/theme';
 
 const time = (ms?: number) => (ms ? new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'never');
@@ -14,7 +14,7 @@ const time = (ms?: number) => (ms ? new Date(ms).toLocaleTimeString(undefined, {
 export default function Detection() {
   const { colors } = useTheme();
   const info = useLoad(async () => ({ serviceOn: gateServiceEnabled(), ...detectionInfo() }));
-  if (!info) return <Screen>{null}</Screen>;
+  if (!info) return <LoadingState label="Checking…" />;
 
   const report = () =>
     Share.share({
@@ -23,6 +23,7 @@ export default function Detection() {
 
   return (
     <Screen>
+      <BackBar />
       <Txt variant="title">Detection check</Txt>
       <Txt muted>What the Reels and Shorts counter saw today. It records only the apps' internal names for the parts of the screen you scrolled, never what was on it.</Txt>
       <Card tone={info.serviceOn ? undefined : 'over'}>

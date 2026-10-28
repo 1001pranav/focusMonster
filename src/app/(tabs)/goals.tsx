@@ -1,40 +1,58 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { View } from 'react-native';
 import { addDays, formatMinutes, startOf, today } from '@/domain/dates';
 import { weeklyFocusByGoal } from '@/domain/focus';
 import { MAX_GOALS } from '@/domain/tasks';
 import { loadFocusSessions, loadGoals, loadTasks } from '@/db/repo';
-import { useLoad } from '@/data/hooks';
-import { Button, Card, Row, Screen, Txt } from '@/ui/components';
+import { useLoadResult } from '@/data/hooks';
+import { useToday } from '@/data/today';
+import { Button, Card, ErrorState, LoadingState, Row, Screen, Section, Txt } from '@/ui/components';
+import { HabitsCard } from '@/ui/HabitsCard';
+import { space, useTheme } from '@/ui/theme';
 
+/** What the won-back time is for: up to three goals, and the habits that replace scrolling. */
 export default function Goals() {
-  const data = useLoad(async () => {
+  const { colors } = useTheme();
+  const todayData = useToday().value;
+  const { value: goals, error, reload } = useLoadResult(async () => {
     const weekStart = addDays(today(), -6);
-    const [goals, tasks, sessions] = await Promise.all([loadGoals(), loadTasks(weekStart), loadFocusSessions(startOf(weekStart).getTime())]);
+    const [all, tasks, sessions] = await Promise.all([loadGoals(), loadTasks(weekStart), loadFocusSessions(startOf(weekStart).getTime())]);
     const doneThisWeek = (id: string) => tasks.filter((t) => t.goalId === id && t.status === 'done' && t.day >= weekStart).length;
     const focus = weeklyFocusByGoal(sessions, tasks, today(), Date.now());
-    return goals.map((g) => ({ ...g, done: doneThisWeek(g.id), focusMin: focus[g.id] ?? 0 }));
+    return all.map((g) => ({ ...g, done: doneThisWeek(g.id), focusMin: focus[g.id] ?? 0 }));
   });
-  if (!data) return <Screen>{null}</Screen>;
+  if (!goals) return error ? <ErrorState error={error} onRetry={reload} /> : <LoadingState />;
+
   return (
     <Screen>
       <Txt variant="title">Goals</Txt>
-      <Txt muted>Up to {MAX_GOALS}. With ten goals, none of them matter. Keep at least one away from screens.</Txt>
-      {data.map((g) => (
+      <Section title="What the time is for" meta={`${goals.length} of ${MAX_GOALS}`} />
+      {!goals.length ? (
+        <Card>
+          <Txt muted>Name what you'd rather do with the time you win back. Keep at least one away from screens.</Txt>
+        </Card>
+      ) : null}
+      {goals.map((g) => (
         <Card key={g.id}>
-          <Row onPress={() => router.push({ pathname: '/goal/[id]', params: { id: g.id } })} style={{ justifyContent: 'space-between' }}>
-            <Txt variant="heading" style={{ flex: 1 }}>
-              {g.title}
-            </Txt>
-            <Txt variant="label" muted>
-              {g.done} done{g.focusMin >= 1 ? ` · ${formatMinutes(g.focusMin)} focused` : ''} this week
-            </Txt>
+          <Row onPress={() => router.push({ pathname: '/goal/[id]', params: { id: g.id } })} style={{ alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, gap: space.xs }}>
+              <Txt variant="heading">{g.title}</Txt>
+              {g.why ? <Txt muted>“{g.why}”</Txt> : null}
+              <Txt variant="caption" style={{ color: colors.primary }}>
+                {g.done} tasks done{g.focusMin >= 1 ? ` · ${formatMinutes(g.focusMin)} focused` : ''} this week
+              </Txt>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </Row>
-          {g.why ? <Txt muted>“{g.why}”</Txt> : null}
         </Card>
       ))}
-      {data.length < MAX_GOALS ? (
-        <Button title="Add a goal" icon="add" kind={data.length ? 'secondary' : 'primary'} onPress={() => router.push({ pathname: '/goal/[id]', params: { id: 'new' } })} />
+      {goals.length < MAX_GOALS ? (
+        <Button title="Add a goal" icon="add" kind={goals.length ? 'secondary' : 'primary'} onPress={() => router.push({ pathname: '/goal/[id]', params: { id: 'new' } })} />
       ) : null}
+
+      <Section title="Instead of scrolling" />
+      {todayData ? <HabitsCard data={todayData} /> : null}
     </Screen>
   );
 }

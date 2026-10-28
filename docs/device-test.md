@@ -24,7 +24,7 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 
 | # | Do | Expect |
 |---|---|---|
-| 2.1 | Use Instagram for ~5 min, come back | The ring and "Where today's time went" grow by about 5 min |
+| 2.1 | Use Instagram for ~5 min, come back | The ring on Today grows by about 5 min, and so does Instagram in Progress → "Where today's time went" |
 | 2.2 | Compare Instagram's minutes with Digital Wellbeing | Within a few minutes of each other. A big gap means the time counting is wrong |
 | 2.3 | Add three Top 3 tasks, one linked to your goal | A 4th can't be added; ticking a task marks it done |
 | 2.4 | ⏳ Next day | Yesterday's open tasks show under "Left over" with *Today* / *Drop* |
@@ -33,14 +33,17 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 
 | # | Do | Expect |
 |---|---|---|
-| 3.1 | Tap *Turn on the mindful gate* on Today, then *Open Accessibility settings* | Android's Accessibility screen |
+| 3.1 | Today → *Finish setting up* → Accessibility service → *Turn on*, then *Open Accessibility* | Android's Accessibility screen |
 | 3.2 | Find *FocusMonster mindful gate* and turn it on | On Android 13+ you'll likely see **"Restricted setting"**. Then: setup step 2 → App info → ⋮ → *Allow restricted settings* → try again |
 | 3.3 | Open Instagram | **The pause screen appears within a second**: "Opening Instagram", reasons, budget, your why, next task |
 | 3.4 | Tap *Close Instagram* | You're on the home screen |
 | 3.5 | Open Instagram, pick a reason, wait out the countdown, tap *Continue* | Instagram opens |
 | 3.6 | Pull down notifications, open WhatsApp for 30 s, back to Instagram | **No** second pause |
 | 3.7 | Leave Instagram for 3+ minutes, reopen | The pause shows again |
-| 3.8 | Back on Today | "Mindful gate today: paused you N times, you turned back M" |
+| 3.7b | Open Instagram with no Top 3 task set | No "null" anywhere on the pause screen: the task section is simply missing |
+| 3.7c | Open your banking and UPI apps | They open normally. FocusMonster no longer watches them |
+| 3.7d | If a bank still refuses: Settings → Protection → *Banking app won't open?* | The service turns off and the bank opens. A reminder comes after 15 min to turn it back on |
+| 3.8 | Progress tab | "Mindful gate today: paused you N×, turned back M×" |
 
 ## 4. 24-hour lock
 
@@ -91,7 +94,7 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 | # | Do | Expect |
 |---|---|---|
 | 8.1 | After 18:00, write a reflection on Today | It shows as "TODAY YOU: …" |
-| 8.2 | Today → *See your week* | The week's numbers. "Most scrolling: around …" matches when you actually scroll |
+| 8.2 | Progress → *Full review* | The week's numbers. "Most scrolling: around …" matches when you actually scroll |
 | 8.3 | *Share this week* | The share sheet with an image: totals only, no app names |
 | 8.4 | Pick *Phone-free dinner* | Today shows the challenge with 7 empty dots |
 | 8.5 | ⏳ After 20:30 | Today's dot is ✓ if you stayed off the phone, ✗ if not |
