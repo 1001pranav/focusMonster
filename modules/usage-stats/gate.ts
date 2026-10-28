@@ -48,6 +48,9 @@ export interface GateConfig {
   nightAt: string;
   bedtime: { enabled: boolean; start: string; end: string; morningFreeMin: number };
   bedtimeNext: { enabled: boolean; start: string; end: string; morningFreeMin: number; at: number } | null;
+  /** The live counter over Reels/Shorts, and the epoch ms it turns off (0 for never). */
+  overlay: boolean;
+  overlayOffAt: number;
   nextTask: string | null;
   why: string | null;
 }

@@ -10,7 +10,7 @@ import { hhmmOf, minuteOf, MORNING_FREE_CHOICES, opensAt, type Bedtime } from '@
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
-import { setBedtime, setGateWanted } from '@/services/lock';
+import { setBedtime, setGateWanted, setOverlayWanted } from '@/services/lock';
 import { setShortsPolicy } from '@/services/shorts';
 import { ensurePermission } from '@/services/notifications';
 import { Card, Chip, Row, Screen, Stepper, Txt } from '@/ui/components';
@@ -99,7 +99,7 @@ export default function Settings() {
         </Row>
       </Card>
       <BedtimeSettings bedtime={settings.bedtime} next={settings.pending.bedtimeNext ?? null} now={now} />
-      <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} serviceOn={serviceOn} now={now} />
+      <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} serviceOn={serviceOn} now={now} overlay={settings.shortsOverlay} overlayOffAt={settings.pending.overlayOffAt ?? null} />
       <Card>
         <Txt variant="heading">Morning plan</Txt>
         <Stepper value={toMinutes(settings.morningAt)} onChange={(v) => setTime('morningAt', v)} step={30} min={4 * 60} max={12 * 60} format={toHHMM} />
@@ -118,7 +118,8 @@ const MODES: { mode: ShortsPolicy['mode']; label: string }[] = [
 ];
 
 /** Reels/Shorts policy. Stricter choices apply at once; gentler ones wait 24 hours. */
-function ShortsSettings({ policy, next, serviceOn, now }: { policy: ShortsPolicy; next: (ShortsPolicy & { at: number }) | null; serviceOn: boolean; now: number }) {
+function ShortsSettings({ policy, next, serviceOn, now, overlay, overlayOffAt }: { policy: ShortsPolicy; next: (ShortsPolicy & { at: number }) | null; serviceOn: boolean; now: number; overlay: boolean; overlayOffAt: number | null }) {
+  const { colors } = useTheme();
   const shown = next ?? policy;
   const choose = (p: ShortsPolicy) => setShortsPolicy(p).then(changed);
   const describe = (p: ShortsPolicy) =>
@@ -148,6 +149,20 @@ function ShortsSettings({ policy, next, serviceOn, now }: { policy: ShortsPolicy
             </Txt>
           </View>
         ) : null}
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Txt>Live counter</Txt>
+            <Txt variant="caption" muted>
+              {!overlay ? 'Off' : overlayOffAt !== null ? `Turns off ${timeUntil(overlayOffAt, now)}. Switch on to keep it.` : 'A small count at the top while you watch'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Live counter"
+            value={overlay && overlayOffAt === null}
+            onValueChange={(on) => setOverlayWanted(on).then(changed)}
+            trackColor={{ true: colors.primary, false: colors.track }}
+          />
+        </Row>
         {next ? (
           <Txt variant="caption" muted>
             Still {describe(policy)} until the change starts {timeUntil(next.at, now)}. Pick the current setting again to cancel.

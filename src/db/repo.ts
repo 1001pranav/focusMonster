@@ -26,9 +26,11 @@ export interface Settings {
   pending: Pending;
   shorts: ShortsPolicy;
   bedtime: Bedtime;
+  /** The live counter over Reels/Shorts. */
+  shortsOverlay: boolean;
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME, shortsOverlay: true };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
