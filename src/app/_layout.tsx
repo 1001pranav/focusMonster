@@ -30,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="apps" />
           <Stack.Screen name="review" />
+          <Stack.Screen name="challenges" />
           <Stack.Screen name="goal/[id]" options={{ presentation: 'modal' }} />
         </Stack.Protected>
         <Stack.Protected guard={!settings.onboarded}>

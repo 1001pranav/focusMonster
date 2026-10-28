@@ -16,6 +16,7 @@ import { useStore } from '@/db/store';
 import { importGateLog, pushGateConfig } from '@/services/gate';
 import { applyDuePending } from '@/services/lock';
 import { importShortVideo } from '@/services/shorts';
+import { checkChallenge, type ActiveChallenge } from '@/services/challenges';
 import { syncFinishedDays, usageSameTimeLastWeek, usageSoFar } from '@/services/usage';
 
 /** Runs `load` on mount, after every database write, and when the app comes back to the foreground. */
@@ -68,6 +69,7 @@ export interface TodayData {
     todayMin: number;
   };
   habits: { habit: Habit; done: boolean; pickedAtGate: boolean }[];
+  challenge: ActiveChallenge | null;
   /** Tonight's one-liner, once written. */
   reflection: string | null;
   now: number;
@@ -93,6 +95,7 @@ export function useToday(): TodayData | null {
     const focus = running(sessions, now);
     const justDone =
       [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
+    const challenge = await checkChallenge({ current: day, tags, bedtime: settings.bedtime, days });
     const pickedAtGate = new Set(gateEvents.filter((e) => e.choice === 'instead').map((e) => e.habitId));
     pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, bedtime: settings.bedtime, tasks, goals, day });
     const apps = Object.entries(usage)
@@ -116,6 +119,7 @@ export function useToday(): TodayData | null {
       shortVideo: shortVideoLines(shortRows, day, addDays(day, -1)),
       focus: { running: focus, justDone, todayMin: focusedToday(sessions, day, now) },
       habits: habits.map((habit) => ({ habit, done: doneOn(habitLogs, habit.id, day), pickedAtGate: pickedAtGate.has(habit.id) })),
+      challenge,
       reflection: reflections[0]?.text ?? null,
       now,
     };
