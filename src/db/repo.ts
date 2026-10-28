@@ -1,5 +1,7 @@
 import type { AppTag } from '@/domain/apps';
+import type { FocusSession } from '@/domain/focus';
 import type { GateEvent } from '@/domain/gate';
+import type { Habit, HabitLog } from '@/domain/habits';
 import { NO_PENDING, type Pending } from '@/domain/lock';
 import { DEFAULT_SHORTS, type ShortsPolicy, type ShortVideoDay } from '@/domain/shorts';
 import type { Day } from '@/domain/dates';
@@ -167,18 +169,18 @@ export async function saveGateEvents(events: GateEvent[]): Promise<void> {
   const db = await getDb();
   await db.withExclusiveTransactionAsync(async (tx) => {
     for (const e of events) {
-      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec, kind) VALUES (?, ?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec, e.kind]);
+      await tx.runAsync('INSERT INTO gate_events (at, package, reason, choice, wait_sec, kind, habit_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [e.at, e.packageName, e.reason, e.choice, e.waitSec, e.kind, e.habitId]);
     }
   });
 }
 
 export async function loadGateEvents(sinceMs: number): Promise<GateEvent[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number; kind: GateEvent['kind'] }>(
+  const rows = await db.getAllAsync<{ at: number; package: string; reason: GateEvent['reason']; choice: GateEvent['choice']; wait_sec: number; kind: GateEvent['kind']; habit_id: string | null }>(
     'SELECT * FROM gate_events WHERE at >= ? ORDER BY at',
     [sinceMs],
   );
-  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec, kind: r.kind }));
+  return rows.map((r) => ({ at: r.at, packageName: r.package, reason: r.reason, choice: r.choice, waitSec: r.wait_sec, kind: r.kind, habitId: r.habit_id }));
 }
 
 // Short videos
@@ -198,4 +200,63 @@ export async function loadShortVideo(fromDay: Day): Promise<ShortVideoDay[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ day: Day; package: string; count: number; ms: number; blocked: number }>('SELECT * FROM short_video WHERE day >= ?', [fromDay]);
   return rows.map((r) => ({ day: r.day, packageName: r.package, count: r.count, ms: r.ms, blocked: r.blocked }));
+}
+
+// Focus sessions
+
+interface FocusRow {
+  id: string;
+  task_id: string | null;
+  goal_id: string | null;
+  started_at: number;
+  planned_end: number;
+  ended_at: number | null;
+}
+
+const toSession = (r: FocusRow): FocusSession => ({ id: r.id, taskId: r.task_id, goalId: r.goal_id, startedAt: r.started_at, plannedEnd: r.planned_end, endedAt: r.ended_at });
+
+export async function loadFocusSessions(sinceMs: number): Promise<FocusSession[]> {
+  const db = await getDb();
+  return (await db.getAllAsync<FocusRow>('SELECT * FROM focus_sessions WHERE started_at >= ? ORDER BY started_at', [sinceMs])).map(toSession);
+}
+
+export async function addFocusSession(s: FocusSession): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO focus_sessions (id, task_id, goal_id, started_at, planned_end, ended_at) VALUES (?, ?, ?, ?, ?, NULL)', [s.id, s.taskId, s.goalId, s.startedAt, s.plannedEnd]);
+}
+
+/** Ends whichever session is running at `at`. */
+export async function endRunningFocus(at: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE focus_sessions SET ended_at = ? WHERE ended_at IS NULL AND started_at <= ? AND planned_end > ?', [at, at, at]);
+}
+
+// Habits
+
+export async function loadHabits(): Promise<Habit[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; title: string; created_at: number }>('SELECT * FROM habits WHERE archived = 0 ORDER BY created_at');
+  return rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at }));
+}
+
+export async function addHabit(title: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO habits (id, title, created_at) VALUES (?, ?, ?)', [newId(), title, Date.now()]);
+}
+
+export async function archiveHabit(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [id]);
+}
+
+export async function loadHabitLogs(fromDay: Day): Promise<HabitLog[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ habit_id: string; day: Day }>('SELECT * FROM habit_logs WHERE day >= ?', [fromDay]);
+  return rows.map((r) => ({ habitId: r.habit_id, day: r.day }));
+}
+
+export async function setHabitDone(habitId: string, day: Day, done: boolean): Promise<void> {
+  const db = await getDb();
+  if (done) await db.runAsync('INSERT OR IGNORE INTO habit_logs (habit_id, day) VALUES (?, ?)', [habitId, day]);
+  else await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND day = ?', [habitId, day]);
 }

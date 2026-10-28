@@ -37,6 +37,12 @@ All data stays on the phone. There is no account and no backend.
 - How it works: inside Instagram and YouTube only, the accessibility service looks for the short-video player by its view id (`FocusAccessibilityService.PLAYERS`). Only swipes of the player itself count, and a burst of scroll events from one swipe is one video. Time in the player stops counting a minute after the last swipe.
 - ⚠️ When Instagram or YouTube renames those view ids in an update, detection stops silently. If the counts drop to zero while you're clearly watching, the ids need updating.
 
+## Focus sessions and habits
+
+- **Focus session** (25 or 50 min, optionally on one of today's tasks): every wasted app is closed while it runs, even with the gate switched off, and an earlier *Continue* doesn't count. The gate offers *Back to work*, or *End the session early* after a 10 s wait. A notification marks the end, and Today asks whether the task is done.
+- Focus minutes count toward the task's goal, and the Goals tab shows them per week.
+- **Replacement habits** (up to 5) are checked off on Today. The first three appear on the gate under **Instead**: picking one closes the app, and Today asks later whether you actually did it.
+
 ## Commitment lock
 
 Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.

@@ -28,7 +28,14 @@ data class GateConfig(
   /** A weaker short-video policy waiting out the 24-hour lock, and when it starts. */
   val shortsNext: ShortsPolicy? = null,
   val shortsNextAt: Long = 0,
+  /** Epoch ms a focus session ends; while it runs, wasted apps are closed to the user. */
+  val focusUntil: Long = 0,
+  val focusTask: String? = null,
+  /** Replacement habits offered on the gate: id to title. */
+  val instead: List<Pair<String, String>> = emptyList(),
 ) {
+  fun focusActive(now: Long) = now < focusUntil
+
   fun shortsPolicy(now: Long): ShortsPolicy = if (shortsNext != null && now >= shortsNextAt) shortsNext else shorts
 
   /** Whether opening [pkg] at [now] should go through the gate. */
@@ -78,7 +85,18 @@ object GateStore {
       shorts = o.optJSONObject("shorts")?.let(::policy) ?: ShortsPolicy(ShortsPolicy.PAUSE, 20),
       shortsNext = o.optJSONObject("shortsNext")?.let(::policy),
       shortsNextAt = o.optJSONObject("shortsNext")?.optLong("at", 0) ?: 0,
+      focusUntil = o.optLong("focusUntil", 0),
+      focusTask = o.optString("focusTask").takeIf { it.isNotEmpty() },
+      instead = (o.optJSONArray("instead") ?: JSONArray()).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { h -> h.getString("id") to h.getString("title") } } },
     )
+  }
+
+  /** Ends a running focus session at once, from the gate, without waiting for the JS side. */
+  @Synchronized
+  fun endFocus(context: Context, now: Long) {
+    val json = prefs(context).getString(CONFIG, null) ?: return
+    val o = runCatching { JSONObject(json) }.getOrNull() ?: return
+    saveConfig(context, o.put("focusUntil", now).toString())
   }
 
   private fun policy(o: JSONObject) = ShortsPolicy(o.optString("mode", ShortsPolicy.PAUSE), o.optInt("limit", 20))

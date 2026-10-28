@@ -31,6 +31,11 @@ export interface GateConfig {
   shorts: { mode: string; limit: number };
   /** A weaker Reels/Shorts policy and the epoch ms it starts. */
   shortsNext: { mode: string; limit: number; at: number } | null;
+  /** Epoch ms the running focus session ends; 0 when none runs. */
+  focusUntil: number;
+  focusTask: string | null;
+  /** Replacement habits offered on the gate. */
+  instead: { id: string; title: string }[];
   targetMin: number;
   nextTask: string | null;
   why: string | null;
@@ -46,6 +51,7 @@ export interface RawGateEvent {
   waitSec: number;
   /** Missing in entries logged before breaks existed. */
   kind?: string;
+  habitId?: string | null;
 }
 
 /** Gate decisions since the last call, oldest first. */

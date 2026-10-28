@@ -5,11 +5,13 @@ import { defaultTag, wastedMinutes, type AppTag } from '@/domain/apps';
 import { addDays, startOf, today, type Day } from '@/domain/dates';
 import { summarize, type GateSummary } from '@/domain/gate';
 import { shortVideoLines, type ShortVideoLine } from '@/domain/shorts';
+import { focusedToday, running, statusOf, type FocusSession } from '@/domain/focus';
+import { doneOn, type Habit } from '@/domain/habits';
 import { reclaimedMinutes } from '@/domain/reclaimed';
 import { streakOf, type Streak } from '@/domain/streak';
 import { averageBefore, evaluate, type DayResult } from '@/domain/target';
 import type { Goal, Task } from '@/domain/tasks';
-import { loadAppLabels, loadDailyUsage, loadGateEvents, loadShortVideo, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
+import { loadAppLabels, loadDailyUsage, loadFocusSessions, loadGateEvents, loadHabitLogs, loadHabits, loadShortVideo, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
 import { useStore } from '@/db/store';
 import { importGateLog, pushGateConfig } from '@/services/gate';
 import { applyDuePending } from '@/services/lock';
@@ -59,6 +61,14 @@ export interface TodayData {
   tasks: Task[];
   gate: { wanted: boolean; serviceOn: boolean; today: GateSummary };
   shortVideo: ShortVideoLine[];
+  focus: {
+    running: FocusSession | null;
+    /** A session that ran to the end in the last 15 minutes while its task is still open. */
+    justDone: FocusSession | null;
+    todayMin: number;
+  };
+  habits: { habit: Habit; done: boolean; pickedAtGate: boolean }[];
+  now: number;
 }
 
 export function useToday(): TodayData | null {
@@ -76,7 +86,13 @@ export function useToday(): TodayData | null {
     const { days, todayTarget } = plan ? evaluate(plan, wastedByDay, day) : { days: [], todayTarget: 0 };
     const gateEvents = await loadGateEvents(startOf(day).getTime());
     const shortRows = await loadShortVideo(addDays(day, -1));
-    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, tags, targetMin: todayTarget, tasks, goals, day });
+    const now = Date.now();
+    const [sessions, habits, habitLogs] = await Promise.all([loadFocusSessions(startOf(day).getTime()), loadHabits(), loadHabitLogs(day)]);
+    const focus = running(sessions, now);
+    const justDone =
+      [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
+    const pickedAtGate = new Set(gateEvents.filter((e) => e.choice === 'instead').map((e) => e.habitId));
+    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)
@@ -96,6 +112,9 @@ export function useToday(): TodayData | null {
       tasks,
       gate: { wanted: settings.gateEnabled, serviceOn: gateServiceEnabled(), today: summarize(gateEvents) },
       shortVideo: shortVideoLines(shortRows, day, addDays(day, -1)),
+      focus: { running: focus, justDone, todayMin: focusedToday(sessions, day, now) },
+      habits: habits.map((habit) => ({ habit, done: doneOn(habitLogs, habit.id, day), pickedAtGate: pickedAtGate.has(habit.id) })),
+      now,
     };
   });
 }

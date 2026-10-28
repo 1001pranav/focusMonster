@@ -32,6 +32,7 @@ class FocusAccessibilityService : AccessibilityService() {
   }
 
   private var foreground: String? = null
+  private var lastWindow: String? = null
   private var playerApp: String? = null
   private var lastCheck = 0L
 
@@ -48,8 +49,15 @@ class FocusAccessibilityService : AccessibilityService() {
   override fun onInterrupt() {}
 
   private fun onWindow(pkg: String, now: Long) {
-    val gated = GateStore.config(this).gates(pkg, now)
+    val config = GateStore.config(this)
+    // A focus session closes every wasted app, whether or not the gate is switched on, and an
+    // earlier "Continue" doesn't count.
+    val focusBlocked = config.focusActive(now) && pkg in config.wasted
+    val gated = !focusBlocked && config.gates(pkg, now)
+    val prev = lastWindow
+    lastWindow = pkg
     if (Gate.rules.onForeground(pkg, now, gated)) openGate(pkg, GateActivity.MODE_OPEN)
+    if (focusBlocked && pkg != prev) openGate(pkg, GateActivity.MODE_FOCUS)
 
     if (pkg == foreground) {
       if (pkg in PLAYERS) checkPlayer(pkg, now)
@@ -103,6 +111,7 @@ class FocusAccessibilityService : AccessibilityService() {
   }
 
   private fun onScroll(pkg: String, event: AccessibilityEvent, now: Long) {
+    if (GateStore.config(this).focusActive(now)) return
     // Only swipes of the player itself: scrolling comments or the feed isn't a new video.
     val id = event.source?.viewIdResourceName?.substringAfter(":id/") ?: return
     if (id !in PLAYERS.getValue(pkg)) return
