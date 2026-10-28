@@ -11,7 +11,7 @@ import { reclaimedMinutes } from '@/domain/reclaimed';
 import { streakOf, type Streak } from '@/domain/streak';
 import { averageBefore, evaluate, type DayResult } from '@/domain/target';
 import type { Goal, Task } from '@/domain/tasks';
-import { loadAppLabels, loadDailyUsage, loadFocusSessions, loadGateEvents, loadHabitLogs, loadHabits, loadShortVideo, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
+import { loadAppLabels, loadDailyUsage, loadFocusSessions, loadGateEvents, loadHabitLogs, loadHabits, loadReflections, loadShortVideo, loadGoals, loadSettings, loadTags, loadTasks, type Settings } from '@/db/repo';
 import { useStore } from '@/db/store';
 import { importGateLog, pushGateConfig } from '@/services/gate';
 import { applyDuePending } from '@/services/lock';
@@ -68,6 +68,8 @@ export interface TodayData {
     todayMin: number;
   };
   habits: { habit: Habit; done: boolean; pickedAtGate: boolean }[];
+  /** Tonight's one-liner, once written. */
+  reflection: string | null;
   now: number;
 }
 
@@ -87,7 +89,7 @@ export function useToday(): TodayData | null {
     const gateEvents = await loadGateEvents(startOf(day).getTime());
     const shortRows = await loadShortVideo(addDays(day, -1));
     const now = Date.now();
-    const [sessions, habits, habitLogs] = await Promise.all([loadFocusSessions(startOf(day).getTime()), loadHabits(), loadHabitLogs(day)]);
+    const [sessions, habits, habitLogs, reflections] = await Promise.all([loadFocusSessions(startOf(day).getTime()), loadHabits(), loadHabitLogs(day), loadReflections(day)]);
     const focus = running(sessions, now);
     const justDone =
       [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
@@ -114,6 +116,7 @@ export function useToday(): TodayData | null {
       shortVideo: shortVideoLines(shortRows, day, addDays(day, -1)),
       focus: { running: focus, justDone, todayMin: focusedToday(sessions, day, now) },
       habits: habits.map((habit) => ({ habit, done: doneOn(habitLogs, habit.id, day), pickedAtGate: pickedAtGate.has(habit.id) })),
+      reflection: reflections[0]?.text ?? null,
       now,
     };
   });

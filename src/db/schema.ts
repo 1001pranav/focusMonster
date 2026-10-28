@@ -27,4 +27,8 @@ export const MIGRATIONS: string[] = [
   -- The habit picked from the gate's "Instead" list.
   ALTER TABLE gate_events ADD COLUMN habit_id TEXT;
   `,
+  `
+  -- The nightly one-liner: what the reclaimed time went to.
+  CREATE TABLE reflections (day TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL);
+  `,
 ];

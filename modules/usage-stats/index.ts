@@ -6,6 +6,7 @@ interface UsageStatsNative {
   openUsageAccessSettings(): void;
   foregroundTime(startMs: number, endMs: number): Promise<string>;
   launcherApps(): Promise<string>;
+  byHour(startMs: number, endMs: number, packages: string[]): Promise<string>;
 }
 
 const native = requireOptionalNativeModule<UsageStatsNative>('UsageStats');
@@ -31,4 +32,10 @@ export interface LauncherApp {
 export async function launcherApps(): Promise<LauncherApp[]> {
   if (!native) return [];
   return JSON.parse(await native.launcherApps()) as LauncherApp[];
+}
+
+/** Milliseconds of the given apps in each local hour of the day (24 numbers), summed over the range. */
+export async function usageByHour(startMs: number, endMs: number, packages: string[]): Promise<number[]> {
+  if (!native) return new Array(24).fill(0);
+  return JSON.parse(await native.byHour(startMs, endMs, packages)) as number[];
 }

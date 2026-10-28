@@ -59,6 +59,12 @@ The JS side sends today's target together with what tomorrow's would be after a 
 - Any change that frees a minute bedtime covers now, including moving the window, waits out the 24-hour lock.
 - **Home-screen widget:** "2h 10m left · of 5h 40m · 34 short videos", orange once you're over. The background worker refreshes it, and so does every config push from the app.
 
+## Weekly review and reflection
+
+- **Weekly review** (Today → *See your week*): the last seven finished days against the seven before, compared per day. It shows days on target, the best day, the **hour you scroll most**, short videos per day, focus minutes, habits done, gate pauses and reasons, and your reflections.
+- **Share card:** an image with totals only (average per day, change, days on target, short videos, focus minutes), shared through the system share sheet. No app names or reflections.
+- **Nightly reflection:** after 18:00, Today asks "What did you do with the time you won back?" One line is enough.
+
 ## Commitment lock
 
 Anything that weakens a protection waits 24 hours; anything that strengthens it happens at once.

@@ -2,6 +2,7 @@ import type { AppTag } from '@/domain/apps';
 import { DEFAULT_BEDTIME, type Bedtime } from '@/domain/bedtime';
 import type { FocusSession } from '@/domain/focus';
 import type { GateEvent } from '@/domain/gate';
+import type { Reflection } from '@/domain/review';
 import type { Habit, HabitLog } from '@/domain/habits';
 import { NO_PENDING, type Pending } from '@/domain/lock';
 import { DEFAULT_SHORTS, type ShortsPolicy, type ShortVideoDay } from '@/domain/shorts';
@@ -261,4 +262,16 @@ export async function setHabitDone(habitId: string, day: Day, done: boolean): Pr
   const db = await getDb();
   if (done) await db.runAsync('INSERT OR IGNORE INTO habit_logs (habit_id, day) VALUES (?, ?)', [habitId, day]);
   else await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND day = ?', [habitId, day]);
+}
+
+// Reflections
+
+export async function saveReflection(day: Day, text: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT OR REPLACE INTO reflections (day, text, created_at) VALUES (?, ?, ?)', [day, text, Date.now()]);
+}
+
+export async function loadReflections(fromDay: Day): Promise<Reflection[]> {
+  const db = await getDb();
+  return db.getAllAsync<Reflection>('SELECT day, text FROM reflections WHERE day >= ? ORDER BY day', [fromDay]);
 }
