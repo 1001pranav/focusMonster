@@ -39,6 +39,9 @@ class FocusGateModule : Module() {
 
     Function("drainLog") { GateStore.drainLog(context) }
 
+    /** Starts the background worker once; later calls keep the running schedule. */
+    Function("scheduleBackground") { BudgetWorker.schedule(context) }
+
     Function("shortVideoDays") { ShortVideoStore.read(context).toString() }
   }
 }

@@ -30,7 +30,8 @@ export function targetFor(plan: Plan, hits: number): number {
  * Results of every finished day from the plan's start, and today's target. A day with no recorded
  * usage (the phone was off, or its data was lost) is left out: it neither counts as a hit nor a miss.
  */
-export function evaluate(plan: Plan, wastedByDay: Record<Day, number>, current: Day): { days: DayResult[]; todayTarget: number } {
+/** Also returns tomorrow's target if today is hit, for the native side to use before the app is opened again. */
+export function evaluate(plan: Plan, wastedByDay: Record<Day, number>, current: Day): { days: DayResult[]; todayTarget: number; nextIfHit: number } {
   const days: DayResult[] = [];
   let hits = 0;
   for (const day of daysBetween(plan.startDay, current)) {
@@ -41,7 +42,7 @@ export function evaluate(plan: Plan, wastedByDay: Record<Day, number>, current: 
     if (hit) hits++;
     days.push({ day, wastedMin, targetMin, hit });
   }
-  return { days, todayTarget: targetFor(plan, hits) };
+  return { days, todayTarget: targetFor(plan, hits), nextIfHit: targetFor(plan, hits + 1) };
 }
 
 /** Average of the days that have data among the `n` days before `current`, or null if none do. */

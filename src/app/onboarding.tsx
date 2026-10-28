@@ -7,7 +7,7 @@ import { daysPerYear } from '@/domain/reclaimed';
 import { targetFor } from '@/domain/target';
 import { saveGoal, saveSettings, saveTags } from '@/db/repo';
 import { changed } from '@/db/store';
-import { ensurePermission, scheduleDaily } from '@/services/notifications';
+import { ensurePermission } from '@/services/notifications';
 import { detectBaseline } from '@/services/usage';
 import { AppTagList, useAppList } from '@/ui/AppTagList';
 import { Button, Card, Field, Screen, Stepper, Txt } from '@/ui/components';
@@ -27,7 +27,7 @@ export default function Onboarding() {
     if (!baseline) return;
     if (title.trim()) await saveGoal({ title: title.trim(), why: why.trim() });
     await saveSettings({ onboarded: true, plan: { baselineMin: baseline.min, floorMin: Math.min(floor, baseline.min), startDay: today() } });
-    if (await ensurePermission()) await scheduleDaily('08:00', '21:30');
+    await ensurePermission();
     changed();
   };
 

@@ -55,6 +55,8 @@ class GateActivity : Activity() {
 
   private lateinit var pkg: String
   private var mode = MODE_OPEN
+  /** Today's target, worked out natively so a new day is right before FocusMonster is opened. */
+  private var targetMin = 0
   private var reason: String? = null
   private var waitLeft = 0
   private var waitTotal = 0
@@ -68,8 +70,10 @@ class GateActivity : Activity() {
     pkg = intent.getStringExtra(EXTRA_PACKAGE) ?: return finish()
     mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_OPEN
     val config = GateStore.config(this)
-    val usedMin = wastedMinutesToday(config)
-    val ratio = if (config.targetMin > 0) usedMin / config.targetMin else 0.0
+    val numbers = TodayNumbers.measure(this, config, System.currentTimeMillis())
+    val usedMin = numbers.usedMin
+    val ratio = numbers.ratio
+    targetMin = numbers.targetMin
     // A break mid-scroll is never shorter than 10 s: it has to outlast the urge to swipe.
     waitTotal = when (mode) {
       MODE_FOCUS -> 10
@@ -104,13 +108,6 @@ class GateActivity : Activity() {
     super.onDestroy()
   }
 
-  private fun wastedMinutesToday(config: GateConfig): Double =
-    runCatching {
-      UsageReader.foregroundMs(this, UsageReader.startOfToday(), System.currentTimeMillis())
-        .filterKeys { it in config.wasted }
-        .values.sum() / 60000.0
-    }.getOrDefault(0.0)
-
   private fun appLabel(): String =
     runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
 
@@ -136,13 +133,13 @@ class GateActivity : Activity() {
     column.addView(space(16))
     column.addView(reasonChips())
 
-    if (config.targetMin > 0) {
+    if (targetMin > 0) {
       column.addView(space(24))
       val over = ratio >= 1
       column.addView(
         text(
-          if (over) "You're ${minutes(usedMin - config.targetMin)} over today's target."
-          else "${minutes(usedMin)} of today's ${minutes(config.targetMin.toDouble())} used.",
+          if (over) "You're ${minutes(usedMin - targetMin)} over today's target."
+          else "${minutes(usedMin)} of today's ${minutes(targetMin.toDouble())} used.",
           15f,
           if (over) OVER else TEXT,
         ),

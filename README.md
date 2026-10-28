@@ -20,7 +20,7 @@ All data stays on the phone. There is no account and no backend.
 - **Time won back:** how far each finished day came in under your baseline, added up.
 - **Goals (at most 3), each with a why** that shows on the Today screen.
 - **Daily Top 3:** tasks can link to a goal. Unfinished tasks are carried over to today or dropped.
-- **Morning plan and nightly recap notifications** at times you choose.
+- **Morning plan and nightly recap notifications** at times you choose (posted by the background worker since v2; see below).
 
 ## v2: mindful gate
 
@@ -42,6 +42,16 @@ All data stays on the phone. There is no account and no backend.
 - **Focus session** (25 or 50 min, optionally on one of today's tasks): every wasted app is closed while it runs, even with the gate switched off, and an earlier *Continue* doesn't count. The gate offers *Back to work*, or *End the session early* after a 10 s wait. A notification marks the end, and Today asks whether the task is done.
 - Focus minutes count toward the task's goal, and the Goals tab shows them per week.
 - **Replacement habits** (up to 5) are checked off on Today. The first three appear on the gate under **Instead**: picking one closes the app, and Today asks later whether you actually did it.
+
+## Background worker
+
+A WorkManager job runs about every 15 minutes (Android's minimum; Doze can stretch the gap). It measures today's wasted time natively and posts:
+
+- budget warnings at **50%, 80% and 100%** of today's target, each at most once a day;
+- the **morning plan** with the real target and yesterday's result, any time in the three hours after its set time;
+- the **nightly recap** with today's time, whether the target was hit, tomorrow's target and the day's short-video count.
+
+The JS side sends today's target together with what tomorrow's would be after a hit or a miss. On a new day the native side checks yesterday's usage and picks one, so the gate and the notifications are correct before FocusMonster is opened.
 
 ## Commitment lock
 
