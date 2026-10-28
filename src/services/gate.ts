@@ -1,4 +1,5 @@
-import { configureGate, drainGateLog } from '../../modules/usage-stats/gate';
+import * as Notifications from 'expo-notifications';
+import { configureGate, drainGateLog, pauseService } from '../../modules/usage-stats/gate';
 import type { GateChoice, GateEvent, GateReason } from '@/domain/gate';
 import { gateWhy, nextTask } from '@/domain/gate';
 import { DEFAULT_WASTED, type AppTag } from '@/domain/apps';
@@ -75,4 +76,22 @@ export function wastedPackages(tags: Record<string, AppTag>): string[] {
   const tagged = Object.entries(tags).filter(([, tag]) => tag === 'wasted').map(([pkg]) => pkg);
   const untaggedDefaults = [...DEFAULT_WASTED].filter((pkg) => !(pkg in tags));
   return [...tagged, ...untaggedDefaults];
+}
+
+const RESUME_REMINDER = 'resume-gate';
+export const PAUSE_MIN = 15;
+
+/**
+ * For banking and UPI apps that refuse to open while any accessibility service is on. Android only
+ * lets the user turn the service back on, so a reminder follows after PAUSE_MIN minutes.
+ */
+export async function pauseForBanking(): Promise<boolean> {
+  if (!pauseService()) return false;
+  await Notifications.cancelScheduledNotificationAsync(RESUME_REMINDER).catch(() => {});
+  await Notifications.scheduleNotificationAsync({
+    identifier: RESUME_REMINDER,
+    content: { title: 'FocusMonster is still paused', body: 'Done with your banking app? Tap to turn the gate and the Reels counter back on.' },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(Date.now() + PAUSE_MIN * 60000), channelId: 'daily' },
+  }).catch((e) => console.warn(e));
+  return true;
 }

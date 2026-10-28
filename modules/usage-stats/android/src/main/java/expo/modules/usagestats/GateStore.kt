@@ -1,6 +1,8 @@
 package expo.modules.usagestats
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -80,6 +82,8 @@ object GateStore {
   fun saveConfig(context: Context, json: String) {
     prefs(context).edit().putString(CONFIG, json).apply()
     cached = parse(json)
+    // The wasted list may have changed: the service narrows itself to it.
+    FocusAccessibilityService.instance?.let { service -> Handler(Looper.getMainLooper()).post { runCatching { service.applyWatchList() } } }
   }
 
   fun config(context: Context): GateConfig =
@@ -93,16 +97,16 @@ object GateStore {
       enabled = o.optBoolean("enabled", false),
       wasted = (0 until wasted.length()).map { wasted.getString(it) }.toSet(),
       targetMin = o.optInt("targetMin", 0),
-      nextTask = o.optString("nextTask").takeIf { it.isNotEmpty() },
-      why = o.optString("why").takeIf { it.isNotEmpty() },
+      nextTask = text(o, "nextTask"),
+      why = text(o, "why"),
       offAt = o.optLong("offAt", 0),
       releaseAt = release.keys().asSequence().associateWith { release.getLong(it) },
       shorts = o.optJSONObject("shorts")?.let(::policy) ?: ShortsPolicy(ShortsPolicy.PAUSE, 20),
       shortsNext = o.optJSONObject("shortsNext")?.let(::policy),
       shortsNextAt = o.optJSONObject("shortsNext")?.optLong("at", 0) ?: 0,
       focusUntil = o.optLong("focusUntil", 0),
-      focusTask = o.optString("focusTask").takeIf { it.isNotEmpty() },
-      plan = TargetPlan(o.optString("day"), o.optInt("targetMin", 0), o.optInt("ifHitMin", o.optInt("targetMin", 0)), o.optInt("ifMissMin", o.optInt("targetMin", 0))),
+      focusTask = text(o, "focusTask"),
+      plan = TargetPlan(text(o, "day") ?: "", o.optInt("targetMin", 0), o.optInt("ifHitMin", o.optInt("targetMin", 0)), o.optInt("ifMissMin", o.optInt("targetMin", 0))),
       morningAt = o.optString("morningAt", "08:00"),
       nightAt = o.optString("nightAt", "21:30"),
       quiet = o.optJSONObject("bedtime")?.let(::quiet) ?: QuietHours.OFF,
@@ -120,6 +124,15 @@ object GateStore {
     val json = prefs(context).getString(CONFIG, null) ?: return
     val o = runCatching { JSONObject(json) }.getOrNull() ?: return
     saveConfig(context, o.put("focusUntil", now).toString())
+  }
+
+  /**
+   * A string field, or null when it's missing, JSON null or blank. Android's optString turns JSON
+   * null into the text "null", which is how the gate came to show "YOUR NEXT TASK: null".
+   */
+  internal fun text(o: JSONObject, key: String): String? {
+    if (!o.has(key) || o.isNull(key)) return null
+    return o.optString(key).takeIf { it.isNotBlank() && it != "null" }
   }
 
   private fun quiet(o: JSONObject) =
