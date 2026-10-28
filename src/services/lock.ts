@@ -5,10 +5,10 @@ import { loadSettings, loadTags, saveSettings, setTags } from '@/db/repo';
 /** Applies the pending changes whose 24 hours are up. The native gate already honours them on time. */
 export async function applyDuePending(): Promise<void> {
   const settings = await loadSettings();
-  const { gateOff, untag, rest } = takeDue(settings.pending, Date.now());
-  if (!gateOff && !untag.length) return;
+  const { gateOff, untag, shorts, rest } = takeDue(settings.pending, Date.now());
+  if (!gateOff && !untag.length && !shorts) return;
   if (untag.length) await setTags(Object.fromEntries(untag.map((pkg) => [pkg, 'neutral' as AppTag])));
-  await saveSettings({ pending: rest, ...(gateOff ? { gateEnabled: false } : {}) });
+  await saveSettings({ pending: rest, ...(gateOff ? { gateEnabled: false } : {}), ...(shorts ? { shorts } : {}) });
 }
 
 /** On is immediate; off waits 24 hours. Turning it back on cancels a pending off. */

@@ -25,6 +25,12 @@ import org.json.JSONObject
 class GateActivity : Activity() {
   companion object {
     const val EXTRA_PACKAGE = "package"
+    const val EXTRA_MODE = "mode"
+    const val EXTRA_REELS = "reels"
+    const val EXTRA_SINCE = "since"
+    /** Opening a wasted app, or a break in the middle of Reels/Shorts. */
+    const val MODE_OPEN = "open"
+    const val MODE_BREAK = "break"
 
     /** Stored keys; the JS side (src/domain/gate.ts) has the matching labels. */
     private val REASONS = listOf(
@@ -46,6 +52,7 @@ class GateActivity : Activity() {
   }
 
   private lateinit var pkg: String
+  private var mode = MODE_OPEN
   private var reason: String? = null
   private var waitLeft = 0
   private var waitTotal = 0
@@ -57,10 +64,12 @@ class GateActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     pkg = intent.getStringExtra(EXTRA_PACKAGE) ?: return finish()
+    mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_OPEN
     val config = GateStore.config(this)
     val usedMin = wastedMinutesToday(config)
     val ratio = if (config.targetMin > 0) usedMin / config.targetMin else 0.0
-    waitTotal = GateRules.waitSeconds(ratio)
+    // A break mid-scroll is never shorter than 10 s: it has to outlast the urge to swipe.
+    waitTotal = GateRules.waitSeconds(ratio).let { if (mode == MODE_BREAK) maxOf(10, it) else it }
     waitLeft = waitTotal
     setContentView(layout(config, usedMin, ratio))
     if (Build.VERSION.SDK_INT >= 33) {
@@ -72,7 +81,7 @@ class GateActivity : Activity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     // Another wasted app was opened while the gate was up: start over for that one.
-    if (intent.getStringExtra(EXTRA_PACKAGE) != pkg) {
+    if (intent.getStringExtra(EXTRA_PACKAGE) != pkg || intent.getStringExtra(EXTRA_MODE) != mode) {
       setIntent(intent)
       recreate()
     }
@@ -105,9 +114,18 @@ class GateActivity : Activity() {
       setPadding(dp(24), dp(56), dp(24), dp(32))
     }
     val label = appLabel()
-    column.addView(text("Opening $label", 26f, TEXT, bold = true))
-    column.addView(space(8))
-    column.addView(text("Why are you opening it?", 17f, MUTED))
+    if (mode == MODE_BREAK) {
+      val reels = intent.getIntExtra(EXTRA_REELS, 0)
+      val since = intent.getLongExtra(EXTRA_SINCE, System.currentTimeMillis())
+      val kind = if (pkg.contains("youtube")) "Shorts" else "reels"
+      column.addView(text("$reels $kind in a row", 26f, TEXT, bold = true))
+      column.addView(space(8))
+      column.addView(text("That's ${minutes((System.currentTimeMillis() - since) / 60000.0)} of swiping. Why keep going?", 17f, MUTED))
+    } else {
+      column.addView(text("Opening $label", 26f, TEXT, bold = true))
+      column.addView(space(8))
+      column.addView(text("Why are you opening it?", 17f, MUTED))
+    }
     column.addView(space(16))
     column.addView(reasonChips())
 
@@ -221,7 +239,8 @@ class GateActivity : Activity() {
         .put("package", pkg)
         .put("reason", reason ?: JSONObject.NULL)
         .put("choice", choice)
-        .put("waitSec", waitTotal),
+        .put("waitSec", waitTotal)
+        .put("kind", mode),
     )
   }
 

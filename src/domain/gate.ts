@@ -20,6 +20,7 @@ export interface GateEvent {
   reason: GateReason | null;
   choice: GateChoice;
   waitSec: number;
+  kind: 'open' | 'break';
 }
 
 export interface GateSummary {

@@ -4,6 +4,15 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** What happens in Reels and Shorts: just count them, pause every [limit] videos, or block the player. */
+data class ShortsPolicy(val mode: String, val limit: Int) {
+  companion object {
+    const val COUNT = "count"
+    const val PAUSE = "pause"
+    const val BLOCK = "block"
+  }
+}
+
 /** What the JS side tells the gate, refreshed whenever the app's data changes. */
 data class GateConfig(
   val enabled: Boolean,
@@ -15,7 +24,13 @@ data class GateConfig(
   val offAt: Long = 0,
   /** Wasted apps on their way out, and when they stop being gated. */
   val releaseAt: Map<String, Long> = emptyMap(),
+  val shorts: ShortsPolicy = ShortsPolicy(ShortsPolicy.PAUSE, 20),
+  /** A weaker short-video policy waiting out the 24-hour lock, and when it starts. */
+  val shortsNext: ShortsPolicy? = null,
+  val shortsNextAt: Long = 0,
 ) {
+  fun shortsPolicy(now: Long): ShortsPolicy = if (shortsNext != null && now >= shortsNextAt) shortsNext else shorts
+
   /** Whether opening [pkg] at [now] should go through the gate. */
   fun gates(pkg: String, now: Long): Boolean {
     if (!enabled || (offAt > 0 && now >= offAt)) return false
@@ -60,8 +75,13 @@ object GateStore {
       why = o.optString("why").takeIf { it.isNotEmpty() },
       offAt = o.optLong("offAt", 0),
       releaseAt = release.keys().asSequence().associateWith { release.getLong(it) },
+      shorts = o.optJSONObject("shorts")?.let(::policy) ?: ShortsPolicy(ShortsPolicy.PAUSE, 20),
+      shortsNext = o.optJSONObject("shortsNext")?.let(::policy),
+      shortsNextAt = o.optJSONObject("shortsNext")?.optLong("at", 0) ?: 0,
     )
   }
+
+  private fun policy(o: JSONObject) = ShortsPolicy(o.optString("mode", ShortsPolicy.PAUSE), o.optInt("limit", 20))
 
   @Synchronized
   fun appendLog(context: Context, entry: JSONObject) {

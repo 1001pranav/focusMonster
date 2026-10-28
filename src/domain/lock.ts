@@ -1,3 +1,5 @@
+import type { ShortsPolicy } from './shorts';
+
 /**
  * Commitment lock: anything that weakens the user's protection waits 24 hours, anything that
  * strengthens it happens at once. The decision is made by the calm daytime self, not by the
@@ -10,9 +12,11 @@ export interface Pending {
   gateOffAt: number | null;
   /** Apps leaving the wasted list, and when they stop counting. */
   untagAt: Record<string, number>;
+  /** A weaker Reels/Shorts policy, and when it starts. Missing in data saved before it existed. */
+  shortsNext?: (ShortsPolicy & { at: number }) | null;
 }
 
-export const NO_PENDING: Pending = { gateOffAt: null, untagAt: {} };
+export const NO_PENDING: Pending = { gateOffAt: null, untagAt: {}, shortsNext: null };
 
 /** A second request doesn't restart the clock. */
 export const requestGateOff = (p: Pending, now: number): Pending => ({ ...p, gateOffAt: p.gateOffAt ?? now + LOCK_MS });
@@ -26,12 +30,24 @@ export function cancelUntag(p: Pending, pkg: string): Pending {
   return { ...p, untagAt: rest };
 }
 
+/** A later weaker request replaces the policy but keeps the original deadline. */
+export const requestShorts = (p: Pending, policy: ShortsPolicy, now: number): Pending => ({ ...p, shortsNext: { ...policy, at: p.shortsNext?.at ?? now + LOCK_MS } });
+
+export const cancelShorts = (p: Pending): Pending => ({ ...p, shortsNext: null });
+
 /** The changes whose time has come, and what stays pending. */
-export function takeDue(p: Pending, now: number): { gateOff: boolean; untag: string[]; rest: Pending } {
+export function takeDue(p: Pending, now: number): { gateOff: boolean; untag: string[]; shorts: ShortsPolicy | null; rest: Pending } {
   const gateOff = p.gateOffAt !== null && p.gateOffAt <= now;
   const untag = Object.keys(p.untagAt).filter((pkg) => p.untagAt[pkg] <= now);
   const untagAt = Object.fromEntries(Object.entries(p.untagAt).filter(([, at]) => at > now));
-  return { gateOff, untag, rest: { gateOffAt: gateOff ? null : p.gateOffAt, untagAt } };
+  const next = p.shortsNext ?? null;
+  const shortsDue = next !== null && next.at <= now;
+  return {
+    gateOff,
+    untag,
+    shorts: shortsDue ? { mode: next.mode, limit: next.limit } : null,
+    rest: { gateOffAt: gateOff ? null : p.gateOffAt, untagAt, shortsNext: shortsDue ? null : next },
+  };
 }
 
 /** "in 23h", "in 40m": how long until a pending change happens. */

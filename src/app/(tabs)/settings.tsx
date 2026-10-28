@@ -5,12 +5,14 @@ import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-
 import { gateServiceEnabled } from '../../../modules/usage-stats/gate';
 import { formatMinutes } from '@/domain/dates';
 import { timeUntil } from '@/domain/lock';
+import { LIMIT_CHOICES, type ShortsPolicy } from '@/domain/shorts';
 import { loadSettings, saveSettings } from '@/db/repo';
 import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
 import { setGateWanted } from '@/services/lock';
+import { setShortsPolicy } from '@/services/shorts';
 import { ensurePermission, scheduleDaily } from '@/services/notifications';
-import { Card, Row, Screen, Stepper, Txt } from '@/ui/components';
+import { Card, Chip, Row, Screen, Stepper, Txt } from '@/ui/components';
 import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
 
@@ -95,7 +97,7 @@ export default function Settings() {
           />
         </Row>
       </Card>
-      {settings.gateEnabled && !serviceOn ? <GateSetup /> : null}
+      <ShortsSettings policy={settings.shorts} next={settings.pending.shortsNext ?? null} serviceOn={serviceOn} now={now} />
       <Card>
         <Txt variant="heading">Morning plan</Txt>
         <Stepper value={toMinutes(settings.morningAt)} onChange={(v) => setTime('morningAt', v)} step={30} min={4 * 60} max={12 * 60} format={toHHMM} />
@@ -104,5 +106,53 @@ export default function Settings() {
         <Stepper value={toMinutes(settings.nightAt)} onChange={(v) => setTime('nightAt', v)} step={30} min={17 * 60} max={23 * 60 + 30} format={toHHMM} />
       </Card>
     </Screen>
+  );
+}
+
+const MODES: { mode: ShortsPolicy['mode']; label: string }[] = [
+  { mode: 'count', label: 'Just count' },
+  { mode: 'pause', label: 'Pause me' },
+  { mode: 'block', label: 'Block' },
+];
+
+/** Reels/Shorts policy. Stricter choices apply at once; gentler ones wait 24 hours. */
+function ShortsSettings({ policy, next, serviceOn, now }: { policy: ShortsPolicy; next: (ShortsPolicy & { at: number }) | null; serviceOn: boolean; now: number }) {
+  const shown = next ?? policy;
+  const choose = (p: ShortsPolicy) => setShortsPolicy(p).then(changed);
+  const describe = (p: ShortsPolicy) =>
+    p.mode === 'count' ? 'counting only' : p.mode === 'pause' ? `a pause every ${p.limit} videos` : 'the player blocked';
+  return (
+    <>
+      <Card>
+        <Txt variant="heading">Reels and Shorts</Txt>
+        <Txt variant="caption" muted>
+          The rest of Instagram and YouTube stays open: messages, search, your feed, long videos.
+        </Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {MODES.map((m) => (
+            <Chip key={m.mode} label={m.label} selected={shown.mode === m.mode} onPress={() => choose({ mode: m.mode, limit: m.mode === 'pause' ? (shown.mode === 'pause' ? shown.limit : 20) : 0 })} />
+          ))}
+        </View>
+        {shown.mode === 'pause' ? (
+          <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+            <Txt variant="caption" muted>
+              Every
+            </Txt>
+            {LIMIT_CHOICES.map((n) => (
+              <Chip key={n} label={`${n}`} selected={shown.limit === n} onPress={() => choose({ mode: 'pause', limit: n })} />
+            ))}
+            <Txt variant="caption" muted>
+              videos
+            </Txt>
+          </View>
+        ) : null}
+        {next ? (
+          <Txt variant="caption" muted>
+            Still {describe(policy)} until the change starts {timeUntil(next.at, now)}. Pick the current setting again to cancel.
+          </Txt>
+        ) : null}
+      </Card>
+      {!serviceOn ? <GateSetup /> : null}
+    </>
   );
 }

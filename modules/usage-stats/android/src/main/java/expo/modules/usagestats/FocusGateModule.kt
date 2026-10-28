@@ -38,5 +38,7 @@ class FocusGateModule : Module() {
     Function("configure") { json: String -> GateStore.saveConfig(context, json) }
 
     Function("drainLog") { GateStore.drainLog(context) }
+
+    Function("shortVideoDays") { ShortVideoStore.read(context).toString() }
   }
 }
