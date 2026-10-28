@@ -33,6 +33,10 @@ data class GateConfig(
   val focusTask: String? = null,
   /** Replacement habits offered on the gate: id to title. */
   val instead: List<Pair<String, String>> = emptyList(),
+  val plan: TargetPlan = TargetPlan("", targetMin, targetMin, targetMin),
+  /** 'HH:MM' times of the morning plan and nightly recap notifications. */
+  val morningAt: String = "08:00",
+  val nightAt: String = "21:30",
 ) {
   fun focusActive(now: Long) = now < focusUntil
 
@@ -87,6 +91,9 @@ object GateStore {
       shortsNextAt = o.optJSONObject("shortsNext")?.optLong("at", 0) ?: 0,
       focusUntil = o.optLong("focusUntil", 0),
       focusTask = o.optString("focusTask").takeIf { it.isNotEmpty() },
+      plan = TargetPlan(o.optString("day"), o.optInt("targetMin", 0), o.optInt("ifHitMin", o.optInt("targetMin", 0)), o.optInt("ifMissMin", o.optInt("targetMin", 0))),
+      morningAt = o.optString("morningAt", "08:00"),
+      nightAt = o.optString("nightAt", "21:30"),
       instead = (o.optJSONArray("instead") ?: JSONArray()).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { h -> h.getString("id") to h.getString("title") } } },
     )
   }

@@ -1,9 +1,15 @@
 import * as Notifications from 'expo-notifications';
+import { scheduleBackground } from '../../modules/usage-stats/gate';
 
 const CHANNEL = 'daily';
 
 let configured = false;
 
+/**
+ * The morning plan, nightly recap and budget warnings are posted by the native background worker
+ * (BudgetWorker), which knows the real numbers. This side only sets up the channel, asks for
+ * permission, and posts the focus-session reminder.
+ */
 export async function configureNotifications() {
   if (configured) return;
   configured = true;
@@ -14,6 +20,8 @@ export async function configureNotifications() {
     name: 'Morning plan and nightly recap',
     importance: Notifications.AndroidImportance.DEFAULT,
   });
+  await cancelLegacyDaily();
+  scheduleBackground();
 }
 
 export async function ensurePermission(): Promise<boolean> {
@@ -23,25 +31,10 @@ export async function ensurePermission(): Promise<boolean> {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
-const parse = (hhmm: string) => {
-  const [hour, minute] = hhmm.split(':').map(Number);
-  return { hour, minute };
-};
-
-/**
- * The text is fixed when it's scheduled, and tomorrow's target depends on how today ends, so the
- * notifications invite the user in rather than quote numbers. Numbers come with the v2 background worker.
- */
-export async function scheduleDaily(morningAt: string, nightAt: string): Promise<void> {
-  await configureNotifications();
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  if (!(await Notifications.getPermissionsAsync()).granted) return;
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'Plan your day', body: 'Pick your Top 3 and see today’s target.' },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, ...parse(morningAt), channelId: CHANNEL },
-  });
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'How did today go?', body: 'See your time, your streak and what you got done.' },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, ...parse(nightAt), channelId: CHANNEL },
-  });
+/** v1 scheduled fixed-text daily notifications; the worker replaces them. */
+async function cancelLegacyDaily() {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of scheduled) {
+    if (n.trigger && 'type' in n.trigger && n.trigger.type === 'daily') await Notifications.cancelScheduledNotificationAsync(n.identifier);
+  }
 }

@@ -8,6 +8,7 @@ interface FocusGateNative {
   configure(json: string): void;
   drainLog(): string;
   shortVideoDays(): string;
+  scheduleBackground(): void;
 }
 
 const native = requireOptionalNativeModule<FocusGateNative>('FocusGate');
@@ -36,7 +37,14 @@ export interface GateConfig {
   focusTask: string | null;
   /** Replacement habits offered on the gate. */
   instead: { id: string; title: string }[];
+  /** The day targetMin is for, and tomorrow's target after a hit or a miss. */
+  day: string;
   targetMin: number;
+  ifHitMin: number;
+  ifMissMin: number;
+  /** 'HH:MM' of the morning plan and nightly recap, posted by the background worker. */
+  morningAt: string;
+  nightAt: string;
   nextTask: string | null;
   why: string | null;
 }
@@ -60,3 +68,6 @@ export const drainGateLog = (): RawGateEvent[] => (native ? (JSON.parse(native.d
 /** Reels/Shorts per day and app: {day: {package: {count, ms, blocked}}}, the last two weeks. */
 export const shortVideoDays = (): Record<string, Record<string, { count: number; ms: number; blocked: number }>> =>
   native ? JSON.parse(native.shortVideoDays()) : {};
+
+/** Starts the background worker (budget warnings, morning plan, nightly recap). Safe to call often. */
+export const scheduleBackground = () => native?.scheduleBackground();

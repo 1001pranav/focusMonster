@@ -25,6 +25,7 @@ describe('evaluate', () => {
       [349, true],
     ]);
     expect(todayTarget).toBe(344);
+    expect(evaluate(plan, { '2026-11-01': 300, '2026-11-02': 400, '2026-11-03': 340 }, '2026-11-04').nextIfHit).toBe(339);
   });
 
   it('skips days without data', () => {

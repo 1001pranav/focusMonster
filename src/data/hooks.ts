@@ -83,7 +83,7 @@ export function useToday(): TodayData | null {
     const [tags, labels, usage, lastWeek, goals, tasks] = await Promise.all([loadTags(), loadAppLabels(), usageSoFar(), usageSameTimeLastWeek(), loadGoals(), loadTasks(addDays(day, -1))]);
     const stored = await loadDailyUsage(plan ? addDays(plan.startDay, -7) : addDays(day, -14));
     const wastedByDay = Object.fromEntries(Object.entries(stored).map(([d, u]) => [d, wastedMinutes(u, tags)]));
-    const { days, todayTarget } = plan ? evaluate(plan, wastedByDay, day) : { days: [], todayTarget: 0 };
+    const { days, todayTarget, nextIfHit } = plan ? evaluate(plan, wastedByDay, day) : { days: [], todayTarget: 0, nextIfHit: 0 };
     const gateEvents = await loadGateEvents(startOf(day).getTime());
     const shortRows = await loadShortVideo(addDays(day, -1));
     const now = Date.now();
@@ -92,7 +92,7 @@ export function useToday(): TodayData | null {
     const justDone =
       [...sessions].reverse().find((s) => statusOf(s, now) === 'done' && now - s.plannedEnd < 15 * 60000 && tasks.some((t) => t.id === s.taskId && t.status === 'todo')) ?? null;
     const pickedAtGate = new Set(gateEvents.filter((e) => e.choice === 'instead').map((e) => e.habitId));
-    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, tasks, goals, day });
+    pushGateConfig({ enabled: settings.gateEnabled, pending: settings.pending, shorts: settings.shorts, focus, habits, tags, targetMin: todayTarget, nextIfHit, morningAt: settings.morningAt, nightAt: settings.nightAt, tasks, goals, day });
     const apps = Object.entries(usage)
       .map(([packageName, ms]) => ({ packageName, label: labels[packageName] ?? packageName, minutes: ms / 60000, tag: tags[packageName] ?? defaultTag(packageName) }))
       .filter((a) => a.minutes >= 1)

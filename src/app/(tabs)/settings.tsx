@@ -11,7 +11,7 @@ import { changed } from '@/db/store';
 import { useLoad } from '@/data/hooks';
 import { setGateWanted } from '@/services/lock';
 import { setShortsPolicy } from '@/services/shorts';
-import { ensurePermission, scheduleDaily } from '@/services/notifications';
+import { ensurePermission } from '@/services/notifications';
 import { Card, Chip, Row, Screen, Stepper, Txt } from '@/ui/components';
 import { GateSetup } from '@/ui/GateSetup';
 import { space, useTheme } from '@/ui/theme';
@@ -51,7 +51,7 @@ export default function Settings() {
   const setTime = async (key: 'morningAt' | 'nightAt', min: number) => {
     const next = { ...settings, [key]: toHHMM(min) };
     await saveSettings({ [key]: next[key] });
-    if (await ensurePermission()) await scheduleDaily(next.morningAt, next.nightAt);
+    await ensurePermission();
     changed();
   };
 
