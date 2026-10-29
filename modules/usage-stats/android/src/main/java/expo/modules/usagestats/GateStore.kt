@@ -46,7 +46,12 @@ data class GateConfig(
   /** The live counter over Reels/Shorts, and when it turns itself off (the 24-hour lock). */
   val overlay: Boolean = true,
   val overlayOffAt: Long = 0,
+  /** Apps (mostly banks) that won't run with an accessibility service on: the service turns off for them. */
+  val pauseApps: Set<String> = emptySet(),
 ) {
+  /** Never for a gated app: listing Instagram mustn't be a way around the gate. */
+  fun pausesFor(pkg: String) = pkg in pauseApps && pkg !in wasted
+
   fun overlayOn(now: Long) = overlay && (overlayOffAt == 0L || now < overlayOffAt)
 
   fun quietHours(now: Long): QuietHours = if (quietNext != null && now >= quietNextAt) quietNext else quiet
@@ -82,7 +87,7 @@ object GateStore {
   fun saveConfig(context: Context, json: String) {
     prefs(context).edit().putString(CONFIG, json).apply()
     cached = parse(json)
-    // The wasted list may have changed: the service narrows itself to it.
+    // The wasted and pause lists may have changed: the service narrows itself to them.
     FocusAccessibilityService.instance?.let { service -> Handler(Looper.getMainLooper()).post { runCatching { service.applyWatchList() } } }
   }
 
@@ -93,6 +98,7 @@ object GateStore {
     val o = json?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return GateConfig(false, emptySet(), 0, null, null)
     val wasted = o.optJSONArray("wasted") ?: JSONArray()
     val release = o.optJSONObject("releaseAt") ?: JSONObject()
+    val pause = o.optJSONArray("pauseApps") ?: JSONArray()
     return GateConfig(
       enabled = o.optBoolean("enabled", false),
       wasted = (0 until wasted.length()).map { wasted.getString(it) }.toSet(),
@@ -114,6 +120,7 @@ object GateStore {
       quietNextAt = o.optJSONObject("bedtimeNext")?.optLong("at", 0) ?: 0,
       overlay = o.optBoolean("overlay", true),
       overlayOffAt = o.optLong("overlayOffAt", 0),
+      pauseApps = (0 until pause.length()).map { pause.getString(it) }.toSet(),
       instead = (o.optJSONArray("instead") ?: JSONArray()).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { h -> h.getString("id") to h.getString("title") } } },
     )
   }

@@ -42,7 +42,12 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 | 3.7 | Leave Instagram for 3+ minutes, reopen | The pause shows again |
 | 3.7b | Open Instagram with no Top 3 task set | No "null" anywhere on the pause screen: the task section is simply missing |
 | 3.7c | Open your banking and UPI apps | They open normally. FocusMonster no longer watches them |
-| 3.7d | If a bank still refuses: Settings → Protection → *Banking app won't open?* | The service turns off and the bank opens. A reminder comes after 15 min to turn it back on |
+| 3.7d | If a bank still refuses: Settings → Protection → *Apps that turn FocusMonster off*, switch the bank on, open the bank | FocusMonster turns off and a notification says so. If the bank showed its warning anyway, close it and open it again |
+| 3.7e | Without the adb step: tap that notification | Accessibility settings open, FocusMonster's row highlighted where the phone supports it. Turn it back on |
+| 3.7f | Do the adb step on that screen (`adb shell pm grant com.focusmonster.app android.permission.WRITE_SECURE_SETTINGS`), reopen the screen | The card says "Turns back on by itself" |
+| 3.7g | With the grant: open the bank, then go home and wait ~1 min | An "off while you use …" notification while in the bank; it goes away and Settings shows the Accessibility service *On* again |
+| 3.7h | With the grant: open the bank, then go straight to Instagram | The pause screen appears within a few seconds: a wasted app ends the pause at once |
+| 3.7i | Another app won't open: Settings → *Some other app won't open?* | With the grant, back on by itself after 15 min; without it, a reminder after 15 min |
 | 3.8 | Progress tab | "Mindful gate today: paused you N×, turned back M×" |
 
 ## 4. 24-hour lock

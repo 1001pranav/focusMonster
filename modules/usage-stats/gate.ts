@@ -9,7 +9,8 @@ interface FocusGateNative {
   drainLog(): string;
   shortVideoDays(): string;
   detectionInfo(): string;
-  pauseService(): boolean;
+  pauseService(minutes: number): PauseResult;
+  canResumeItself(): boolean;
   scheduleBackground(): void;
 }
 
@@ -52,6 +53,8 @@ export interface GateConfig {
   /** The live counter over Reels/Shorts, and the epoch ms it turns off (0 for never). */
   overlay: boolean;
   overlayOffAt: number;
+  /** Apps the service turns itself off for (banks that refuse to run while one is on). */
+  pauseApps: string[];
   nextTask: string | null;
   why: string | null;
 }
@@ -91,5 +94,14 @@ export interface DetectionApp {
 /** What Reels/Shorts detection saw today, for the detection check screen. */
 export const detectionInfo = (): { day?: string; apps?: Record<string, DetectionApp> } => (native ? JSON.parse(native.detectionInfo()) : {});
 
-/** Turns the accessibility service off (for apps that refuse to run while one is on). False if it wasn't on. */
-export const pauseService = () => native?.pauseService() ?? false;
+/** 'resumes': back on by itself after the pause. 'paused': only the user can turn it back on. 'off': it wasn't on. */
+export type PauseResult = 'resumes' | 'paused' | 'off';
+
+/** Turns the accessibility service off (for apps that refuse to run while one is on). */
+export const pauseService = (minutes: number): PauseResult => native?.pauseService(minutes) ?? 'off';
+
+/**
+ * Whether the one-time adb grant (WRITE_SECURE_SETTINGS) is there. Without it Android only lets the
+ * user turn the service back on.
+ */
+export const canResumeItself = () => native?.canResumeItself() ?? false;

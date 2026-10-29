@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Alert, Switch, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings } from '../../../modules/usage-stats';
-import { gateServiceEnabled, openAccessibilitySettings } from '../../../modules/usage-stats/gate';
+import { canResumeItself, gateServiceEnabled, openAccessibilitySettings } from '../../../modules/usage-stats/gate';
 import { formatMinutes, startOf } from '@/domain/dates';
 import { timeUntil } from '@/domain/lock';
 import { LIMIT_CHOICES, type ShortsPolicy } from '@/domain/shorts';
@@ -27,9 +27,9 @@ const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')
 
 export default function Settings() {
   const { colors } = useTheme();
-  const { value: loaded, error, reload } = useLoadResult(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled(), usageAccess: hasUsageAccess(), now: Date.now() }));
+  const { value: loaded, error, reload } = useLoadResult(async () => ({ settings: await loadSettings(), serviceOn: gateServiceEnabled(), resumes: canResumeItself(), usageAccess: hasUsageAccess(), now: Date.now() }));
   if (!loaded) return error ? <ErrorState error={error} onRetry={reload} /> : <LoadingState />;
-  const { settings, serviceOn, usageAccess, now } = loaded;
+  const { settings, serviceOn, resumes, usageAccess, now } = loaded;
   const { plan } = settings;
   const offAt = settings.pending.gateOffAt;
   const gateOn = settings.gateEnabled && offAt === null;
@@ -45,14 +45,16 @@ export default function Settings() {
   const pause = () =>
     Alert.alert(
       `Pause for ${PAUSE_MIN} minutes?`,
-      "Some banking and UPI apps won't open while any accessibility service is on. This turns FocusMonster's off: the gate, focus blocking and the Reels counter stop until you turn it back on in Accessibility. You'll get a reminder.",
+      resumes
+        ? `Some banking and UPI apps won't open while any accessibility service is on. This turns FocusMonster's off: the gate, focus blocking and the Reels counter stop, and come back on by themselves after ${PAUSE_MIN} minutes.`
+        : "Some banking and UPI apps won't open while any accessibility service is on. This turns FocusMonster's off: the gate, focus blocking and the Reels counter stop until you turn it back on in Accessibility. You'll get a reminder.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pause',
           onPress: () =>
-            pauseForBanking().then((ok) => {
-              if (!ok) Alert.alert('Nothing to pause', "The Accessibility service isn't on right now.");
+            pauseForBanking().then((result) => {
+              if (result === 'off') Alert.alert('Nothing to pause', "The Accessibility service isn't on right now.");
               changed();
             }),
         },
@@ -95,12 +97,23 @@ export default function Settings() {
           <Switch accessibilityLabel="Mindful gate" value={gateOn} onValueChange={toggleGate} trackColor={{ true: colors.primary, false: colors.track }} />
         </Row>
         <Txt variant="caption" muted>
-          It only watches the apps you marked as wasted time, plus Instagram and YouTube for counting. Banking, UPI and every other app are never watched.
+          It only watches the apps you marked as wasted time, plus Instagram and YouTube for counting, and the apps it turns off for. Every other app is never watched.
         </Txt>
+        <Row onPress={() => router.push('/pause-apps')} style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Txt>Apps that turn FocusMonster off</Txt>
+            <Txt variant="caption" muted>
+              {settings.pauseApps.length
+                ? `${settings.pauseApps.length} ${settings.pauseApps.length === 1 ? 'app' : 'apps'} · ${resumes ? 'turns back on by itself' : 'you turn it back on'}`
+                : 'For banks that refuse to open while it runs'}
+            </Txt>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Row>
         {serviceOn ? (
           <Row onPress={pause} style={{ justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
-              <Txt>Banking app won't open?</Txt>
+              <Txt>Some other app won't open?</Txt>
               <Txt variant="caption" muted>
                 Pause for {PAUSE_MIN} minutes
               </Txt>

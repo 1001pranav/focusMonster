@@ -28,9 +28,11 @@ export interface Settings {
   bedtime: Bedtime;
   /** The live counter over Reels/Shorts. */
   shortsOverlay: boolean;
+  /** Apps FocusMonster turns itself off for, because they won't run with an accessibility service on. */
+  pauseApps: string[];
 }
 
-const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME, shortsOverlay: true };
+const DEFAULTS: Settings = { onboarded: false, plan: null, morningAt: '08:00', nightAt: '21:30', gateEnabled: false, pending: NO_PENDING, shorts: DEFAULT_SHORTS, bedtime: DEFAULT_BEDTIME, shortsOverlay: true, pauseApps: [] };
 
 export async function loadSettings(): Promise<Settings> {
   const db = await getDb();
