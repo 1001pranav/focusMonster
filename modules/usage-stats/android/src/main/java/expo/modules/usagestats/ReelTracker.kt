@@ -6,7 +6,8 @@ package expo.modules.usagestats
  *
  * One swipe fires a burst of scroll events, so a reel is counted when a scroll comes more than
  * [burstGapMs] after the previous one. Leaving the player for longer than [sessionGapMs] ends the
- * session: the next visit starts counting toward a break from zero.
+ * session: the next visit starts counting toward a break from zero. So does a new day, even in the
+ * middle of a swipe: a session that started at 11:50 pm doesn't carry its count past midnight.
  */
 class ReelTracker(private val burstGapMs: Long = 700, private val sessionGapMs: Long = 2 * 60_000L, private val idleMs: Long = 60_000L) {
   private var lastScroll = Long.MIN_VALUE / 2
@@ -23,26 +24,27 @@ class ReelTracker(private val burstGapMs: Long = 700, private val sessionGapMs: 
     private set
   var sessionStartedAt = 0L
     private set
+  /** The local day ('YYYY-MM-DD') the session belongs to; null before the first. */
+  private var sessionDay: String? = null
 
-  /** The player opened. True when that starts a new session, whose first reel counts. */
-  fun enter(now: Long): Boolean {
+  /** The player opened on [day]. True when that starts a new session, whose first reel counts. */
+  fun enter(now: Long, day: String = ""): Boolean {
     if (inFeed) return false
     inFeed = true
     enteredAt = now
     lastActivity = now
-    val newSession = now - leftAt > sessionGapMs
+    val newSession = now - leftAt > sessionGapMs || day != sessionDay
     if (newSession) {
-      sessionCount = 0
-      sinceBreak = 0
-      sessionStartedAt = now
+      startSession(now, day)
       count()
     }
     return newSession
   }
 
-  /** A scroll of the player. True when it moved to a new reel. */
-  fun scroll(now: Long): Boolean {
+  /** A scroll of the player on [day]. True when it moved to a new reel. */
+  fun scroll(now: Long, day: String = ""): Boolean {
     if (!inFeed) return false
+    if (day != sessionDay) startSession(now, day)
     val isNew = now - lastScroll > burstGapMs
     lastScroll = now
     lastActivity = now
@@ -65,6 +67,13 @@ class ReelTracker(private val burstGapMs: Long = 700, private val sessionGapMs: 
 
   fun tookBreak() {
     sinceBreak = 0
+  }
+
+  private fun startSession(now: Long, day: String) {
+    sessionCount = 0
+    sinceBreak = 0
+    sessionStartedAt = now
+    sessionDay = day
   }
 
   private fun count() {

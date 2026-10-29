@@ -29,6 +29,11 @@ class GateRules(private val returnGraceMs: Long = 2 * 60_000L) {
     allowed[pkg] = now
   }
 
+  /** A new day's budget starts with a pause: yesterday's "Continue" doesn't carry over. */
+  fun newDay() {
+    allowed.clear()
+  }
+
   companion object {
     /** The pause gets longer as the day's budget runs out. */
     fun waitSeconds(usedRatio: Double): Int =

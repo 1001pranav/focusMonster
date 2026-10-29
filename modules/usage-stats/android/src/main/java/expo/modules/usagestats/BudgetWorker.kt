@@ -21,6 +21,7 @@ class BudgetWorker(context: Context, params: WorkerParameters) : Worker(context,
     private const val PREFS = "focusmonster_worker"
 
     fun schedule(context: Context) {
+      MidnightReceiver.schedule(context)
       val request = PeriodicWorkRequestBuilder<BudgetWorker>(15, TimeUnit.MINUTES).build()
       WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }
@@ -30,6 +31,8 @@ class BudgetWorker(context: Context, params: WorkerParameters) : Worker(context,
     val context = applicationContext
     val config = GateStore.config(context)
     runCatching { BudgetWidget.updateAll(context) }
+    // Alarms don't survive a reboot; the worker does, so it keeps the midnight refresh armed.
+    runCatching { MidnightReceiver.schedule(context) }
     if (config.plan.day.isEmpty()) return Result.success()
     val now = System.currentTimeMillis()
     val numbers = TodayNumbers.measure(context, config, now)

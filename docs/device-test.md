@@ -100,6 +100,15 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 | 8.4 | Pick *Phone-free dinner* | Today shows the challenge with 7 empty dots |
 | 8.5 | ⏳ After 20:30 | Today's dot is ✓ if you stayed off the phone, ✗ if not |
 
+## 8b. Midnight
+
+| # | Do | Expect |
+|---|---|---|
+| 8b.1 | Swipe Reels across midnight (11:58 pm → 12:01 am) | The pill drops back to `🎬 Reels 1…` after 12:00, not `61 / 80` |
+| 8b.2 | Leave FocusMonster open on Today across midnight | Within a minute of 12:00 it shows the new day: ring near 0, a fresh Top 3 |
+| 8b.3 | Tap Continue on the gate at ~11:58 pm, reopen Instagram after midnight | The pause shows again: a new day's budget starts with one |
+| 8b.4 | Look at the widget just after midnight | It shows the new day within a few minutes, not yesterday's total |
+
 ## 9. Battery and stability (over a few days)
 
 | # | Check | Expect |
