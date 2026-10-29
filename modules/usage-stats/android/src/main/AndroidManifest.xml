@@ -32,6 +32,8 @@
       android:taskAffinity="focusmonster.gate"
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
+    <receiver android:name="expo.modules.usagestats.MidnightReceiver" android:exported="false" />
+
     <receiver
       android:name="expo.modules.usagestats.BudgetWidget"
       android:exported="false"

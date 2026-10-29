@@ -73,4 +73,14 @@ class GateRulesTest {
     assertEquals(15, GateRules.waitSeconds(0.9))
     assertEquals(30, GateRules.waitSeconds(1.0))
   }
+
+  @Test
+  fun `a new day forgets yesterday's continue`() {
+    val rules = GateRules()
+    rules.allow(ig, 0)
+    rules.onForeground(ig, 0, gated = true)
+    rules.onForeground(launcher, 10_000, gated = false)
+    rules.newDay()
+    assertTrue(rules.onForeground(ig, 20_000, gated = true))
+  }
 }

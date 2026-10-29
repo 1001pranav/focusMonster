@@ -79,4 +79,26 @@ class ReelTrackerTest {
     t.scroll(20_000)
     assertEquals(40_000, t.leave(40_000))
   }
+
+  @Test
+  fun `midnight starts a new session even mid-swipe`() {
+    val t = ReelTracker()
+    t.enter(0, "2026-11-02")
+    for (i in 1..59) t.scroll(i * 2_000L, "2026-11-02")
+    assertEquals(60, t.sessionCount)
+    // Still swiping, but it's a new day now.
+    assertTrue(t.scroll(122_000, "2026-11-03"))
+    assertEquals(1, t.sessionCount)
+    assertEquals(1, t.sinceBreak)
+  }
+
+  @Test
+  fun `coming back to the player on a new day is a new session however short the gap`() {
+    val t = ReelTracker()
+    t.enter(0, "2026-11-02")
+    t.scroll(5_000, "2026-11-02")
+    t.leave(10_000)
+    assertTrue(t.enter(20_000, "2026-11-03"))
+    assertEquals(1, t.sessionCount)
+  }
 }

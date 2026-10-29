@@ -50,6 +50,8 @@ class FocusAccessibilityService : AccessibilityService() {
   private val main = Handler(Looper.getMainLooper())
 
   private var foreground: String? = null
+  /** The local day of the last event, to notice midnight. */
+  private var currentDay: String? = null
   private val overlay by lazy { ReelOverlay(this) }
   private var lastWindow: String? = null
   private var playerApp: String? = null
@@ -58,6 +60,12 @@ class FocusAccessibilityService : AccessibilityService() {
   override fun onAccessibilityEvent(event: AccessibilityEvent) {
     val pkg = event.packageName?.toString() ?: return
     val now = System.currentTimeMillis()
+    val day = ShortVideoStore.dayOf(now)
+    if (day != currentDay) {
+      // Midnight: yesterday's "Continue" and Reels session end here, not at the next pause.
+      if (currentDay != null) Gate.rules.newDay()
+      currentDay = day
+    }
     when (event.eventType) {
       AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> onWindow(pkg, now)
       AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> if (pkg in PLAYERS && now - lastCheck >= CHECK_EVERY_MS) checkPlayer(pkg, now)
@@ -167,7 +175,7 @@ class FocusAccessibilityService : AccessibilityService() {
     if (playerApp != null && playerApp != pkg) leavePlayer(now)
     playerApp = pkg
     Detection.notePlayerSeen(this, pkg, now)
-    if (Gate.reels.of(pkg).enter(now)) ShortVideoStore.add(this, pkg, now, count = 1)
+    if (Gate.reels.of(pkg).enter(now, ShortVideoStore.dayOf(now))) ShortVideoStore.add(this, pkg, now, count = 1)
     updateOverlay(pkg, now)
   }
 
@@ -186,7 +194,7 @@ class FocusAccessibilityService : AccessibilityService() {
     if (!PlayerMatch.inPlayer(chain, PLAYERS.getValue(pkg))) return
     val reels = Gate.reels.of(pkg)
     if (!reels.inFeed) enterPlayer(pkg, now)
-    if (!reels.inFeed || !reels.scroll(now)) return
+    if (!reels.inFeed || !reels.scroll(now, ShortVideoStore.dayOf(now))) return
     ShortVideoStore.add(this, pkg, now, count = 1)
     updateOverlay(pkg, now)
     val policy = GateStore.config(this).shortsPolicy(now)
