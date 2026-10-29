@@ -60,6 +60,7 @@ Some checks need time to pass (the next day, a weekend). Those are marked ⏳.
 |---|---|---|
 | 5.1 | Instagram → Reels, swipe through 5 reels, leave | Today: "Reels 5 · Xm". **If it's 0:** Today → *Check detection*. If it says the player was never recognised, tap *Send report* and send it to me with your Instagram version (App info): the report has the player's real name |
 | 5.1b | While swiping Reels, look at the top of the screen | A small pill `🎬 3 / 20` counts up with each reel, and taps on Instagram underneath still work. It disappears when you leave Reels |
+| 5.1c | Watch ~6 Reels, then go straight to YouTube Shorts and swipe 3 | The pill switches to `🎬 Shorts 1…`, `2…`, `3…` with each swipe, starting from 1, not from the Reels count |
 | 5.2 | Scroll comments inside a reel | The count doesn't go up |
 | 5.3 | YouTube → Shorts, swipe 5 | "Shorts 5" (same note: YouTube version if it's 0) |
 | 5.4 | Settings → Reels and Shorts → *Pause me* every 10, then watch 10 reels | "10 reels in a row" break screen, at least 10 s wait |
