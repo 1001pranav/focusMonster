@@ -47,4 +47,12 @@ class GateConfigTest {
     assertFalse(c.focusActive(1000))
     assertFalse(config.focusActive(0))
   }
+
+  @Test
+  fun `turns off for listed apps, never for a gated one`() {
+    val listed = config.copy(pauseApps = setOf("com.sbi.lotusintouch", ig))
+    assertTrue(listed.pausesFor("com.sbi.lotusintouch"))
+    assertFalse(listed.pausesFor(ig))
+    assertFalse(listed.pausesFor("com.whatsapp"))
+  }
 }

@@ -1,6 +1,5 @@
 package expo.modules.usagestats
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -17,15 +16,12 @@ class FocusGateModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("FocusGate")
 
-    Function("isServiceEnabled") {
-      val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-      val me = ComponentName(context, FocusAccessibilityService::class.java)
-      enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
-    }
+    Function("isServiceEnabled") { ServiceSwitch.isOn(context) }
 
-    Function("openAccessibilitySettings") {
-      context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+    Function("openAccessibilitySettings") { context.startActivity(ServiceSwitch.settingsIntent(context)) }
+
+    /** Whether the one-time adb grant is there, so the service can turn itself back on. */
+    Function("canResumeItself") { ServiceSwitch.canTurnOn(context) }
 
     // Android 13+ blocks accessibility for sideloaded apps until "Allow restricted settings" is
     // tapped in the ⋮ menu of the app's info screen.
@@ -49,12 +45,15 @@ class FocusGateModule : Module() {
 
     /**
      * Turns the accessibility service off, for apps (mostly banks) that refuse to run while any is
-     * on. Only the user can turn it back on, in Accessibility settings. False if it wasn't running.
+     * on. "resumes": it comes back on by itself after [minutes] (adb grant). "paused": only the user
+     * can turn it back on. "off": it wasn't running.
      */
-    Function("pauseService") {
-      val service = FocusAccessibilityService.instance ?: return@Function false
+    Function("pauseService") { minutes: Int ->
+      val service = FocusAccessibilityService.instance ?: return@Function "off"
+      val resumes = ServiceSwitch.canTurnOn(context)
+      if (resumes) ResumeReceiver.schedule(context, minutes)
       service.disableSelf()
-      true
+      if (resumes) "resumes" else "paused"
     }
 
     Function("detectionInfo") { Detection.read(context) }

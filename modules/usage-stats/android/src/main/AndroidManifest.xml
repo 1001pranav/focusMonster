@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <!-- Granted by the user in Settings → Usage access, not by a runtime prompt. -->
   <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+  <!-- Granted only with adb, by a user who wants the service back on by itself after a bank
+       (ServiceSwitch). Without it, FocusMonster still turns off but the user turns it back on. -->
+  <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <!-- Lists launcher apps by name for tagging, without QUERY_ALL_PACKAGES. -->
   <queries>
     <intent>
@@ -33,6 +38,17 @@
       android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
     <receiver android:name="expo.modules.usagestats.MidnightReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.usagestats.ResumeReceiver" android:exported="false" />
+
+    <!-- Watches for the user leaving a banking app, to turn the accessibility service back on. -->
+    <service
+      android:name="expo.modules.usagestats.PauseService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Turns the app's accessibility service back on once the user leaves an app that refuses to run while one is enabled." />
+    </service>
 
     <receiver
       android:name="expo.modules.usagestats.BudgetWidget"

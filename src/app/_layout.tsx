@@ -38,6 +38,7 @@ export default function RootLayout() {
         <Stack.Protected guard={settings.onboarded}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="apps" />
+          <Stack.Screen name="pause-apps" />
           <Stack.Screen name="review" />
           <Stack.Screen name="challenges" />
           <Stack.Screen name="detection" />

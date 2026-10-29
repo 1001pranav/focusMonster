@@ -19,6 +19,12 @@ export const DEFAULT_WASTED = new Set([
   'com.next.innovation.takatak',
 ]);
 
+/** Banking, UPI and wallet apps by name, listed first when choosing apps FocusMonster turns off for. */
+const MONEY = /\b(bank|banking|pay|upi|bhim|wallet|yono|imobile|netbanking|finance|money)s?\b/i;
+const MONEY_PACKAGES = /(bank|upi|paisa|paytm|phonepe|bhim|wallet|lotusintouch|imobile|kotak|axis|hdfc|icici|sbi)/i;
+
+export const looksLikeMoney = (packageName: string, label: string) => MONEY.test(label) || MONEY_PACKAGES.test(packageName);
+
 export const defaultTag = (packageName: string): AppTag => (DEFAULT_WASTED.has(packageName) ? 'wasted' : 'neutral');
 
 /** Minutes spent in wasted apps, from milliseconds per package. Untagged apps use their default. */

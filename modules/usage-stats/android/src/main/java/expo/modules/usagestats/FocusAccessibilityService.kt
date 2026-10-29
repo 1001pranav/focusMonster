@@ -38,6 +38,8 @@ class FocusAccessibilityService : AccessibilityService() {
     private const val LOOKBACK_MS = 10 * 60_000L
     /** While the player is open, how often to check the user hasn't switched to an app that isn't watched. */
     private const val WATCHDOG_MS = 1_500L
+    /** If the pause watcher dies with the process, the service still comes back on after this long. */
+    private const val BACKSTOP_MIN = 60
     /** Stands for "some app the service doesn't watch" in the gate's memory. */
     private const val ELSEWHERE = "elsewhere"
 
@@ -78,6 +80,7 @@ class FocusAccessibilityService : AccessibilityService() {
   private fun onWindow(pkg: String, now: Long) {
     if (pkg == packageName) return
     val config = GateStore.config(this)
+    if (pkg !in PLAYERS && config.pausesFor(pkg)) return pauseFor(pkg, now)
     // Only watched apps send events, so usage history says whether this is an arrival and when the
     // user last left; the gate's memory gets the departure it couldn't see.
     val arrival = Visit.of(UsageReader.intervals(this, now - LOOKBACK_MS, now).filter { it.packageName == pkg }, now)
@@ -110,13 +113,27 @@ class FocusAccessibilityService : AccessibilityService() {
   }
 
   /**
-   * The apps the service receives events from: the wasted ones and the short-video apps. Every other
-   * app, banking and UPI apps included, never has the service attached. Never empty: an empty list
+   * Turns the service off for an app that won't run while one is on. With the adb grant a watcher
+   * turns it back on after the user leaves; without it, a notification leads to the switch.
+   */
+  private fun pauseFor(pkg: String, now: Long) {
+    leavePlayer(now)
+    val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("this app")
+    // Started while this service still runs: that's what lets it start from the background.
+    if (ServiceSwitch.canTurnOn(this) && PauseService.start(this, label)) ResumeReceiver.schedule(this, BACKSTOP_MIN)
+    else Notifier.postTurnBackOn(this, label)
+    disableSelf()
+  }
+
+  /**
+   * The apps the service receives events from: the wasted ones, the short-video apps, and the ones
+   * it turns off for. Every other app never has the service attached. Never empty: an empty list
    * would mean every app.
    */
   fun applyWatchList() {
     val info = serviceInfo ?: return
-    val watched = (GateStore.config(this).wasted + PLAYERS.keys).toSortedSet()
+    val config = GateStore.config(this)
+    val watched = (config.wasted + PLAYERS.keys + config.pauseApps).toSortedSet()
     if (info.packageNames?.toSortedSet() == watched) return
     info.packageNames = watched.toTypedArray()
     serviceInfo = info
@@ -221,6 +238,8 @@ class FocusAccessibilityService : AccessibilityService() {
   override fun onServiceConnected() {
     super.onServiceConnected()
     instance = this
+    // Back on, by the watcher or the user: a pending backstop mustn't undo a later "off" by the user.
+    ResumeReceiver.cancel(this)
     applyWatchList()
     registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
   }
