@@ -9,23 +9,25 @@ import { REASON_LABELS } from '@/domain/gate';
 import { buildReview, hourLabel, type WeekReview } from '@/domain/review';
 import { evaluate } from '@/domain/target';
 import { loadDailyUsage, loadFocusSessions, loadGateEvents, loadHabitLogs, loadReflections, loadSettings, loadShortVideo, loadTags } from '@/db/repo';
-import { useLoad } from '@/data/hooks';
+import { useLoadResult } from '@/data/hooks';
 import { wastedPackages } from '@/services/gate';
-import { BackBar, Button, Card, Row, Screen, Txt, LoadingState } from '@/ui/components';
+import { BackBar, Button, Card, ErrorState, Row, Screen, Txt, LoadingState } from '@/ui/components';
 import { space, useTheme } from '@/ui/theme';
 
 /** The last seven finished days, against the seven before. */
 export default function Review() {
   const shareRef = useRef<View>(null);
-  const review = useLoad(async () => {
+  const { value: review, error, reload } = useLoadResult(async () => {
     const lastDay = addDays(today(), -1);
     const from = addDays(lastDay, -6);
     const fromMs = startOf(from).getTime();
     const toMs = startOf(today()).getTime();
-    const [settings, tags, usage, shortVideo, sessions, habitLogs, gateEvents, reflections] = await Promise.all([
-      loadSettings(),
+    const settings = await loadSettings();
+    // Each day's target depends on every hit since the plan started, so the usage goes back that far.
+    const usageFrom = settings.plan && settings.plan.startDay < addDays(from, -7) ? settings.plan.startDay : addDays(from, -7);
+    const [tags, usage, shortVideo, sessions, habitLogs, gateEvents, reflections] = await Promise.all([
       loadTags(),
-      loadDailyUsage(addDays(from, -7)),
+      loadDailyUsage(usageFrom),
       loadShortVideo(from),
       loadFocusSessions(fromMs),
       loadHabitLogs(from),
@@ -37,7 +39,8 @@ export default function Review() {
     const byHour = await usageByHour(fromMs, toMs, wastedPackages(tags));
     return buildReview({ lastDay, days, shortVideo, sessions: sessions.filter((s) => s.startedAt < toMs), habitLogs, gateEvents: gateEvents.filter((e) => e.at < toMs), reflections, byHour, now: Date.now() });
   });
-  if (!review) return <LoadingState label="Putting your week together…" />;
+  // A failed load shows why, instead of a spinner that never ends.
+  if (!review) return error ? <ErrorState error={error} onRetry={reload} /> : <LoadingState label="Putting your week together…" />;
 
   const share = async () => {
     if (!shareRef.current) return;

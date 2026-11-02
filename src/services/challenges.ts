@@ -1,4 +1,5 @@
 import { foregroundTime, hasUsageAccess } from '../../modules/usage-stats';
+import { gateServiceEnabled } from '../../modules/usage-stats/gate';
 import { wastedMinutes, type AppTag } from '@/domain/apps';
 import { minuteOf, type Bedtime } from '@/domain/bedtime';
 import { challengeDays, defOf, passes, progressOf, startDayFor, windowOf, type Challenge, type ChallengeDef, type ChallengeProgress } from '@/domain/challenges';
@@ -45,6 +46,8 @@ export async function checkChallenge(input: { current: Day; tags: Record<string,
 async function measure(def: ChallengeDef, day: Day, start: number, end: number, input: { tags: Record<string, AppTag>; days: DayResult[] }): Promise<number | null> {
   // Without usage access the phone reports nothing, which would read as a perfect day.
   if ((def.metric === 'anyApp' || def.metric === 'wastedApps') && !hasUsageAccess()) return null;
+  // Likewise, with the Accessibility service off nothing counts Reels, and zero would read as a pass.
+  if (def.metric === 'shortVideos' && !gateServiceEnabled()) return null;
   switch (def.metric) {
     case 'anyApp': {
       const usage = await foregroundTime(start, end);

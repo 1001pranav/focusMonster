@@ -66,13 +66,28 @@ export interface ChallengeProgress {
   results: (boolean | null)[];
 }
 
-/** Won as soon as enough days pass; lost as soon as too many fail to win. */
+/**
+ * Won as soon as enough days pass; lost as soon as too many fail to win. Once every day is over
+ * without a win it's lost too: a day with no data to judge by (phone off, usage access revoked)
+ * never gets a result, and the challenge would otherwise stay "running" for good.
+ */
 export function progressOf(c: Challenge, def: ChallengeDef, results: Record<Day, boolean>, current: Day): ChallengeProgress {
   const days = challengeDays(c, def);
   const list = days.map((d) => (d in results ? results[d] : null));
   const passed = list.filter((r) => r === true).length;
   const failed = list.filter((r) => r === false).length;
+  const over = current >= addDays(c.startDay, def.days);
   const status: ChallengeStatus =
-    passed >= def.required ? 'won' : failed > def.days - def.required ? 'lost' : c.ended ? 'ended' : current < c.startDay ? 'upcoming' : 'running';
+    passed >= def.required
+      ? 'won'
+      : failed > def.days - def.required
+        ? 'lost'
+        : c.ended
+          ? 'ended'
+          : over
+            ? 'lost'
+            : current < c.startDay
+              ? 'upcoming'
+              : 'running';
   return { status, passed, failed, results: list };
 }

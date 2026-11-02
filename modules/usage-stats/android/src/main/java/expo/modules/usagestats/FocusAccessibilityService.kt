@@ -40,6 +40,10 @@ class FocusAccessibilityService : AccessibilityService() {
     private const val WATCHDOG_MS = 1_500L
     /** If the pause watcher dies with the process, the service still comes back on after this long. */
     private const val BACKSTOP_MIN = 60
+    /** After the service connects, how long to wait before checking what's already in front. */
+    private const val CONNECT_CHECK_MS = 500L
+    /** Block mode: after sending Back, don't send another while the player is still animating away. */
+    private const val BLOCK_COOLDOWN_MS = 1_500L
     /** Stands for "some app the service doesn't watch" in the gate's memory. */
     private const val ELSEWHERE = "elsewhere"
 
@@ -58,6 +62,8 @@ class FocusAccessibilityService : AccessibilityService() {
   private var lastWindow: String? = null
   private var playerApp: String? = null
   private var lastCheck = 0L
+  /** When Back was last sent to close each app's blocked player. */
+  private val blockedAt = HashMap<String, Long>()
 
   override fun onAccessibilityEvent(event: AccessibilityEvent) {
     val pkg = event.packageName?.toString() ?: return
@@ -118,6 +124,9 @@ class FocusAccessibilityService : AccessibilityService() {
    */
   private fun pauseFor(pkg: String, now: Long) {
     leavePlayer(now)
+    // The user left the gated app for the bank. Without this the gate's memory still has that app in
+    // front, so coming back to it after the pause looks like staying, and it opens with no gate.
+    Gate.rules.onForeground(ELSEWHERE, now, gated = false)
     val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("this app")
     // Started while this service still runs: that's what lets it start from the background.
     if (ServiceSwitch.canTurnOn(this) && PauseService.start(this, label)) ResumeReceiver.schedule(this, BACKSTOP_MIN)
@@ -184,6 +193,11 @@ class FocusAccessibilityService : AccessibilityService() {
   private fun enterPlayer(pkg: String, now: Long) {
     val policy = GateStore.config(this).shortsPolicy(now)
     if (policy.mode == ShortsPolicy.BLOCK) {
+      // One swipe into the player sends a burst of scroll and content events while Back is still
+      // closing it. Answering each with another Back left the app altogether and counted one
+      // block many times.
+      if (now - (blockedAt[pkg] ?: Long.MIN_VALUE / 2) < BLOCK_COOLDOWN_MS) return
+      blockedAt[pkg] = now
       ShortVideoStore.add(this, pkg, now, blocked = 1)
       performGlobalAction(GLOBAL_ACTION_BACK)
       Toast.makeText(this, if (pkg.contains("youtube")) "Shorts are blocked. The rest of YouTube is yours." else "Reels are blocked. The rest of Instagram is yours.", Toast.LENGTH_SHORT).show()
@@ -242,11 +256,25 @@ class FocusAccessibilityService : AccessibilityService() {
     ResumeReceiver.cancel(this)
     applyWatchList()
     registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    // While the service was off it saw nothing, so whatever the gate's memory had in front is gone.
+    Gate.rules.onForeground(ELSEWHERE, System.currentTimeMillis(), gated = false)
+    // No window event comes for an app that's already open, and the pause watcher turns the service
+    // back on precisely because a wasted app came to the front: check it now, or it stays ungated
+    // until the app happens to change screens.
+    main.postDelayed(connectCheck, CONNECT_CHECK_MS)
+  }
+
+  private val connectCheck = Runnable {
+    val now = System.currentTimeMillis()
+    val front = Visit.foreground(UsageReader.intervals(this, now - LOOKBACK_MS, now), now) ?: return@Runnable
+    val config = GateStore.config(this)
+    if (lastWindow == null && (front in config.wasted || front in PLAYERS)) runCatching { onWindow(front, now) }
   }
 
   override fun onDestroy() {
     instance = null
     main.removeCallbacks(watchdog)
+    main.removeCallbacks(connectCheck)
     runCatching { unregisterReceiver(screenOff) }
     overlay.hide()
     super.onDestroy()

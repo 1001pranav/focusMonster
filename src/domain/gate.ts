@@ -21,7 +21,8 @@ export interface GateEvent {
   reason: GateReason | null;
   choice: GateChoice;
   waitSec: number;
-  kind: 'open' | 'break' | 'focus';
+  // 'bedtime': opened during bedtime (GateActivity.MODE_BEDTIME).
+  kind: 'open' | 'break' | 'focus' | 'bedtime';
   /** With 'instead': the habit picked. */
   habitId: string | null;
 }

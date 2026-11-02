@@ -12,7 +12,7 @@ import type { ShortsPolicy } from '@/domain/shorts';
 import type { Goal, Task } from '@/domain/tasks';
 import { endRunningFocus, saveGateEvents } from '@/db/repo';
 
-const KINDS = new Set(['open', 'break', 'focus']);
+const KINDS = new Set(['open', 'break', 'focus', 'bedtime']);
 
 /**
  * Moves the gate's decisions from the native log into SQLite. A focus session ended from the gate

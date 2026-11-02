@@ -30,7 +30,7 @@ export default function Apps() {
   }
 
   const save = async () => {
-    await saveWastedChoice(Object.fromEntries(list.apps.map((a) => [a.packageName, shown[a.packageName] === 'wasted'])));
+    await saveWastedChoice(list.apps.map((a) => ({ packageName: a.packageName, label: a.label, wasted: shown[a.packageName] === 'wasted' })));
     changed();
     router.back();
   };

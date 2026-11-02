@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, View } from 'react-native';
+import { Alert, AppState, View } from 'react-native';
 import { hasUsageAccess, openUsageAccessSettings, usageStatsAvailable } from '../../modules/usage-stats';
 import type { AppTag } from '@/domain/apps';
 import { formatMinutes, today } from '@/domain/dates';
@@ -23,12 +23,21 @@ export default function Onboarding() {
   const [title, setTitle] = useState('');
   const [why, setWhy] = useState('');
 
+  const [finishing, setFinishing] = useState(false);
+
   const finish = async () => {
-    if (!baseline) return;
-    if (title.trim()) await saveGoal({ title: title.trim(), why: why.trim() });
-    await saveSettings({ onboarded: true, plan: { baselineMin: baseline.min, floorMin: Math.min(floor, baseline.min), startDay: today() } });
-    await ensurePermission();
-    changed();
+    // A second tap while the first is saving would add the goal twice.
+    if (!baseline || finishing) return;
+    setFinishing(true);
+    try {
+      if (title.trim()) await saveGoal({ title: title.trim(), why: why.trim() });
+      await saveSettings({ onboarded: true, plan: { baselineMin: baseline.min, floorMin: Math.min(floor, baseline.min), startDay: today() } });
+      await ensurePermission();
+      changed();
+    } catch (e) {
+      setFinishing(false);
+      Alert.alert("Couldn't save", e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
@@ -87,8 +96,8 @@ export default function Onboarding() {
           <Txt muted>Name one thing that matters to you, and why. You'll see it every time you open the app, so you don't forget why you started.</Txt>
           <Field placeholder="Goal, e.g. Get fit, Finish my side project" value={title} onChangeText={setTitle} maxLength={60} />
           <Field placeholder="Why it matters to you" value={why} onChangeText={setWhy} multiline maxLength={280} />
-          <Button title="Start" onPress={finish} disabled={!title.trim()} />
-          <Button title="Skip for now" kind="plain" onPress={finish} />
+          <Button title="Start" onPress={finish} disabled={!title.trim() || finishing} />
+          <Button title="Skip for now" kind="plain" onPress={finish} disabled={finishing} />
         </>
       )}
     </Screen>
@@ -145,8 +154,14 @@ function AppsStep({ onDone }: { onDone: (tags: Record<string, AppTag>) => Promis
           disabled={saving}
           onPress={async () => {
             setSaving(true);
-            await saveTags(list.apps.map((a) => ({ packageName: a.packageName, label: a.label, tag: current[a.packageName] })));
-            await onDone(current);
+            try {
+              await saveTags(list.apps.map((a) => ({ packageName: a.packageName, label: a.label, tag: current[a.packageName] })));
+              await onDone(current);
+            } catch (e) {
+              // Without this the button stays on "Saving…" for good and onboarding can't go on.
+              setSaving(false);
+              Alert.alert("Couldn't save your apps", e instanceof Error ? e.message : String(e));
+            }
           }}
         />
       </View>

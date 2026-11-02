@@ -85,7 +85,13 @@ class BudgetWorker(context: Context, params: WorkerParameters) : Worker(context,
     val reels = ShortVideoStore.read(context).optJSONObject(n.day)?.let { day ->
       day.keys().asSequence().sumOf { day.getJSONObject(it).optInt("count") }
     } ?: 0
-    val next = if (hit) "Under target: tomorrow's drops to ${Budget.minutes(config.plan.ifHitMin.toDouble())}." else "Over by ${Budget.minutes(n.usedMin - n.targetMin)}: tomorrow's target holds."
+    // ifHitMin is the day after config.plan.day. If FocusMonster wasn't opened today, that day is
+    // today, not tomorrow, and the number would just repeat today's target.
+    val next = when {
+      !hit -> "Over by ${Budget.minutes(n.usedMin - n.targetMin)}: tomorrow's target holds."
+      config.plan.day == n.day -> "Under target: tomorrow's drops to ${Budget.minutes(config.plan.ifHitMin.toDouble())}."
+      else -> "Under target: tomorrow's drops a little."
+    }
     val shorts = if (reels > 0) " $reels short videos." else ""
     Notifier.post(context, Notifier.ID_NIGHT, "Today: ${Budget.minutes(n.usedMin)} of ${Budget.minutes(n.targetMin.toDouble())}", "$next$shorts")
   }

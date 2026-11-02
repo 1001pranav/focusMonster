@@ -34,6 +34,14 @@ describe('challenges', () => {
     expect(progressOf(challenge(), week, { '2026-11-02': false }, '2026-11-04').status).toBe('running');
   });
 
+  it('is lost once every day is over without a win, even with days that could not be measured', () => {
+    // 5 passes, 1 fail, 1 day with no data: neither rule fires on its own.
+    const results = Object.fromEntries(['02', '03', '04', '05', '06'].map((d) => [`2026-11-${d}`, true]));
+    results['2026-11-07'] = false;
+    expect(progressOf(challenge(), week, results, '2026-11-08').status).toBe('running');
+    expect(progressOf(challenge(), week, results, '2026-11-09').status).toBe('lost');
+  });
+
   it('shows one result per day, null until measured', () => {
     const p = progressOf(challenge(), week, { '2026-11-02': true }, '2026-11-03');
     expect(p.results).toEqual([true, null, null, null, null, null, null]);

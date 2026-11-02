@@ -1,7 +1,7 @@
-import type { AppTag } from '@/domain/apps';
+import { defaultTag, type AppTag } from '@/domain/apps';
 import { isWeaker, type Bedtime } from '@/domain/bedtime';
 import { cancelBedtime, cancelGateOff, cancelOverlayOff, requestOverlayOff, cancelUntag, requestBedtime, requestGateOff, requestUntag, takeDue } from '@/domain/lock';
-import { loadSettings, loadTags, saveSettings, setTags } from '@/db/repo';
+import { loadSettings, loadTags, saveSettings, saveTags, setTags } from '@/db/repo';
 
 /** Applies the pending changes whose 24 hours are up. The native gate already honours them on time. */
 export async function applyDuePending(): Promise<void> {
@@ -22,16 +22,23 @@ export async function setGateWanted(on: boolean): Promise<void> {
 /**
  * Saves the user's choice of wasted apps. Adding one counts at once; removing one waits 24 hours,
  * and switching it back on in the meantime cancels the removal.
+ *
+ * Apps installed after onboarding have no saved row yet. They get one first, with the tag they
+ * already count with (wasted for the default feeds), so the rules below apply to them too: without
+ * it a new app could never be added, and a newly installed TikTok could never be removed.
  */
-export async function saveWastedChoice(wanted: Record<string, boolean>): Promise<void> {
+export async function saveWastedChoice(choices: { packageName: string; label: string; wasted: boolean }[]): Promise<void> {
   const [settings, saved] = await Promise.all([loadSettings(), loadTags()]);
+  const missing = choices.filter((c) => !(c.packageName in saved));
+  if (missing.length) await saveTags(missing.map((c) => ({ packageName: c.packageName, label: c.label, tag: defaultTag(c.packageName) })));
+  const current = (pkg: string) => saved[pkg] ?? defaultTag(pkg);
   let pending = settings.pending;
   const now: Record<string, AppTag> = {};
-  for (const [pkg, wasted] of Object.entries(wanted)) {
+  for (const { packageName: pkg, wasted } of choices) {
     if (wasted) {
-      if (saved[pkg] !== 'wasted') now[pkg] = 'wasted';
+      if (current(pkg) !== 'wasted') now[pkg] = 'wasted';
       pending = cancelUntag(pending, pkg);
-    } else if (saved[pkg] === 'wasted') {
+    } else if (current(pkg) === 'wasted') {
       pending = requestUntag(pending, pkg, Date.now());
     }
   }
